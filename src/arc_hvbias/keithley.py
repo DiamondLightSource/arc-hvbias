@@ -69,9 +69,6 @@ class Keithley(object):
             warnings.warn(f"Device Identifier not recognized: {model}")
 
     def check_connected(self) -> Tuple[bool, Optional[str]]:
-        # make sure buffers are clear
-        self.ser.reset_input_buffer()
-        self.ser.reset_output_buffer()
         # Check the connection
         model = self.send_recv("*idn?")
         if model is None or "MODEL 24" not in model:
@@ -91,7 +88,6 @@ class Keithley(object):
             try:
                 self.last_recv = self.ser.readline(100).decode()
                 response = self.last_recv
-                # self.ser.flush()
                 return response
             except UnicodeDecodeError as e:
                 warnings.warn(f"{e}")

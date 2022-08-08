@@ -82,9 +82,9 @@ class Ioc:
         builder.LoadDatabase()
         softioc.iocInit()
 
-        cothread.Spawn(self.connection_check)
-        cothread.Spawn(self.update)
         self.pause_update = cothread.Event()
+        cothread.Spawn(self.update)
+        cothread.Spawn(self.connection_check)
         # Finally leave the IOC running with an interactive shell.
         softioc.interactive_ioc(globals())
 
@@ -95,13 +95,13 @@ class Ioc:
                 self.connected.set(0)
                 print("Connection lost. Attempting to reconnect...")
                 self.k.connect()
-                cothread.Sleep(0.5)
             else:
                 if not self.connected.get():
-                    self.connected.set(1)
                     print(f"Connected to device: {model}")
-                    cothread.Sleep(1)
+                    cothread.Sleep(0.5)
+                    self.connected.set(1)
                     self.pause_update.Signal()
+            cothread.Sleep(0.5)
 
     # main update loop
     def update(self) -> None:
