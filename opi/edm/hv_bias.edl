@@ -3,10 +3,10 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 244
-y 811
+x 745
+y 284
 w 1038
-h 450
+h 475
 font "arial-medium-r-16.0"
 ctlFont "arial-bold-r-16.0"
 btnFont "arial-medium-r-16.0"
@@ -184,7 +184,7 @@ release 0
 x 15
 y 335
 w 310
-h 100
+h 125
 lineColor index 14
 fill
 fillColor index 5
@@ -217,7 +217,7 @@ major 4
 minor 0
 release 0
 x 35
-y 380
+y 405
 w 25
 h 20
 controlPv "BL15J-EA-HV-01:OUTPUT_RBV"
@@ -235,7 +235,7 @@ major 4
 minor 1
 release 1
 x 70
-y 360
+y 385
 w 52
 h 16
 font "arial-bold-r-14.0"
@@ -255,7 +255,7 @@ major 4
 minor 1
 release 1
 x 70
-y 385
+y 410
 w 126
 h 16
 font "arial-bold-r-14.0"
@@ -275,7 +275,7 @@ major 4
 minor 0
 release 0
 x 35
-y 355
+y 380
 w 25
 h 20
 controlPv "BL15J-EA-HV-01:HEALTHY_RBV"
@@ -642,7 +642,7 @@ major 4
 minor 1
 release 1
 x 70
-y 410
+y 435
 w 150
 h 16
 font "arial-bold-r-14.0"
@@ -662,7 +662,7 @@ major 4
 minor 0
 release 0
 x 35
-y 405
+y 430
 w 25
 h 20
 controlPv "BL15J-EA-HV-01:CYCLE_RBV"
@@ -923,5 +923,43 @@ offLabel "SOURCE OFF"
 3d
 useEnumNumeric
 font "arial-bold-r-14.0"
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 70
+y 360
+w 77
+h 16
+font "arial-bold-r-14.0"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+value {
+  "Connected"
+}
+autoSize
+endObjectProperties
+
+# (Byte)
+object ByteClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 35
+y 355
+w 25
+h 20
+controlPv "BL15J-EA-HV-01:CONNECTED"
+lineColor index 14
+onColor index 15
+offColor index 24
+lineWidth 2
+numBits 1
 endObjectProperties
 

@@ -3,7 +3,9 @@ Defines a connection to a Kiethley 2400 over serial and provides an interface
 to command and query the device
 """
 import math
+import warnings
 from datetime import datetime
+from typing import Optional, Tuple, Union
 
 import cothread
 import serial
@@ -16,68 +18,107 @@ class Keithley(object):
     def __init__(
         self,
         port: str = "/dev/ttyS0",
-        baud: int = 34800,
+        baud: int = 38400,
         bytesize: int = 8,
         parity: str = "N",
-    ):
-        self.ser = serial.Serial(
-            port, baud, bytesize=bytesize, parity=parity, timeout=1
-        )
+    ) -> None:
+
+        self.port = port
+        self.baud = baud
+        self.bytesize = bytesize
+        self.parity = parity
+        self.ser: serial.Serial = None
 
         self.sweep_start = datetime.now()
         self.sweep_seconds = 0.0
         self.abort_flag = False
 
-        # Check the connection
-        self.send_recv("")
-        self.send_recv("*RST")
-        model = self.send_recv("*idn?")
-        if "MODEL 24" not in model:
-            raise ValueError(f"Device Identifier not recognized: {model}")
-        print(f"connected to: {model}")
+        self.connect()
 
-        # set up useful defaults
-        self.send_recv(self.startup_commands)
-        self.last_recv = ""
-
-    def __del__(self):
+    def __del__(self) -> None:
         if hasattr(self, "connection"):
             self.ser.close()
 
-    def send_recv(self, send: str, respond: bool = False) -> str:
+    def connect(self) -> None:
+
+        if self.ser is not None:
+            self.disconnect()
+
+        self.ser = serial.Serial(
+            self.port,
+            self.baud,
+            bytesize=self.bytesize,
+            parity=self.parity,
+            timeout=1,
+        )
+
+        # make sure buffers are clear
+        self.ser.reset_input_buffer()
+        self.ser.reset_output_buffer()
+
+        # self.send_recv("")
+        self.send_recv("*RST")
+
+        is_connected, model = self.check_connected()
+        if is_connected:
+            # set up useful defaults
+            self.send_recv(self.startup_commands)
+            self.last_recv = ""
+        else:
+            # raise ValueError(f"Device Identifier not recognized:")  # {model}")
+            warnings.warn(f"Device Identifier not recognized: {model}")
+
+    def check_connected(self) -> Tuple[bool, Optional[str]]:
+        # make sure buffers are clear
+        self.ser.reset_input_buffer()
+        self.ser.reset_output_buffer()
+        # Check the connection
+        model = self.send_recv("*idn?")
+        if model is None or "MODEL 24" not in model:
+            return False, None
+        return True, model
+
+    def disconnect(self) -> None:
+        if self.ser.isOpen():
+            self.ser.close()
+        del self.ser
+
+    def send_recv(self, send: str, respond: bool = False) -> Union[str, None]:
+
         self.ser.write((send + "\n").encode())
 
         if respond or send.endswith("?"):
-            self.last_recv = self.ser.readline(100).decode()
-            response = self.last_recv
-            self.ser.flush()
-        else:
-            self.ser.flush()
-            response = ""
+            try:
+                self.last_recv = self.ser.readline(100).decode()
+                response = self.last_recv
+                # self.ser.flush()
+                return response
+            except UnicodeDecodeError as e:
+                warnings.warn(f"{e}")
 
-        return response
+        return None
 
     def get_voltage(self) -> float:
         volts = self.send_recv(":SOURCE:VOLTAGE?")
-        return float(volts)
+        return float(volts) if volts is not None else 0.0
 
-    def set_voltage(self, volts: float):
+    def set_voltage(self, volts: float) -> None:
         # only allow negative voltages
         volts = math.fabs(volts) * -1
-        return self.send_recv(f":SOURCE:VOLTAGE {volts}")
+        resp = self.send_recv(f":SOURCE:VOLTAGE {volts}")
 
     def get_current(self) -> float:
         amps = self.send_recv(":SOURCE:CURRENT?")
         # make it mAmps
-        return float(amps) * 1000
+        return float(amps) * 1000 if amps is not None else 0.0
 
-    def source_off(self, _):
+    def source_off(self, _) -> None:
         self.send_recv(":SOURCE:CLEAR:IMMEDIATE")
 
-    def source_on(self, _):
+    def source_on(self, _) -> None:
         self.send_recv(":OUTPUT:STATE ON")
 
-    def abort(self):
+    def abort(self) -> None:
         self.send_recv(":ABORT")
         # come out of sweep mode if we are in it
         self.sweep_seconds = 0
@@ -85,9 +126,11 @@ class Keithley(object):
 
     def get_source_status(self) -> int:
         result = self.send_recv(":OUTPUT:STATE?")
-        return int(result)
+        return int(result) if result is not None else 0
 
-    def source_voltage_ramp(self, to_volts: float, step_size: float, seconds: float):
+    def source_voltage_ramp(
+        self, to_volts: float, step_size: float, seconds: float
+    ) -> None:
         cothread.Spawn(self.voltage_ramp_worker, *(to_volts, step_size, seconds))
 
     def voltage_ramp_worker(

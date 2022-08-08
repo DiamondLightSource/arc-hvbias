@@ -3,8 +3,8 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 142
-y 376
+x 244
+y 811
 w 1038
 h 450
 font "arial-medium-r-16.0"
@@ -256,8 +256,8 @@ minor 1
 release 1
 x 70
 y 385
-w 125
-h 15
+w 126
+h 16
 font "arial-bold-r-14.0"
 fgColor index 14
 bgColor index 0
@@ -875,5 +875,53 @@ fill
 font "arial-bold-r-14.0"
 fontAlign "center"
 lineWidth 2
+endObjectProperties
+
+# (Message Button)
+object activeMessageButtonClass
+beginObjectProperties
+major 4
+minor 1
+release 0
+x 635
+y 215
+w 225
+h 35
+fgColor index 20
+onColor index 4
+offColor index 3
+topShadowColor index 1
+botShadowColor index 11
+controlPv "BL15J-EA-HV-01:ON"
+pressValue "1"
+onLabel "SOURCE ON"
+offLabel "SOURCE ON"
+3d
+useEnumNumeric
+font "arial-bold-r-14.0"
+endObjectProperties
+
+# (Message Button)
+object activeMessageButtonClass
+beginObjectProperties
+major 4
+minor 1
+release 0
+x 635
+y 265
+w 225
+h 35
+fgColor index 25
+onColor index 4
+offColor index 3
+topShadowColor index 1
+botShadowColor index 11
+controlPv "BL15J-EA-HV-01:OFF"
+pressValue "1"
+onLabel "SOURCE OFF"
+offLabel "SOURCE OFF"
+3d
+useEnumNumeric
+font "arial-bold-r-14.0"
 endObjectProperties
 
