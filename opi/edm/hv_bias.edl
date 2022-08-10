@@ -4,7 +4,7 @@ major 4
 minor 0
 release 1
 x 106
-y 292
+y 329
 w 1038
 h 475
 font "arial-medium-r-16.0"
@@ -752,8 +752,10 @@ topShadowColor index 1
 botShadowColor index 11
 controlPv "BL15J-EA-HV-01:STOP"
 pressValue "1"
-onLabel "STOP"
-offLabel "STOP"
+releaseValue "0"
+onLabel "RESUME"
+offLabel "PAUSE"
+toggle
 3d
 useEnumNumeric
 font "arial-bold-r-14.0"

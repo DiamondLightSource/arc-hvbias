@@ -79,6 +79,7 @@ class Ioc:
         # other state variables
         self.last_time = datetime.now()
         self.last_transition = datetime.now()
+        self.stop_flag = False
         self.abort_flag = False
 
         # Boilerplate get the IOC started
@@ -86,6 +87,8 @@ class Ioc:
         softioc.iocInit()
 
         self.pause_update = cothread.Event()
+        self.pause_cycle = cothread.Event()
+
         cothread.Spawn(self.update)
         cothread.Spawn(self.connection_check)
         # Finally leave the IOC running with an interactive shell.
@@ -199,6 +202,9 @@ class Ioc:
 
         step_size = self.step_size.get()
 
+        if self.stop_flag:
+            self.pause_cycle.Wait()
+
         if not self.abort_flag:
 
             # initially move to a bias-on state
@@ -216,6 +222,7 @@ class Ioc:
         if stop == 0:
             self.stop_flag = False
             self.cycle_rbv.set(True)
+            self.pause_cycle.Signal()
         if stop == 1:
             self.stop_flag = True
             self.cycle_rbv.set(False)
