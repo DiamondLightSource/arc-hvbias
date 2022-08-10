@@ -3,8 +3,8 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 745
-y 284
+x 106
+y 292
 w 1038
 h 475
 font "arial-medium-r-16.0"
@@ -295,7 +295,7 @@ release 0
 x 355
 y 20
 w 245
-h 415
+h 440
 lineColor index 14
 fill
 fillColor index 5
@@ -680,7 +680,7 @@ major 4
 minor 1
 release 0
 x 365
-y 390
+y 375
 w 225
 h 35
 fgColor index 25
@@ -742,7 +742,7 @@ major 4
 minor 1
 release 0
 x 365
-y 340
+y 335
 w 225
 h 35
 fgColor index 20
@@ -961,5 +961,29 @@ onColor index 15
 offColor index 24
 lineWidth 2
 numBits 1
+endObjectProperties
+
+# (Message Button)
+object activeMessageButtonClass
+beginObjectProperties
+major 4
+minor 1
+release 0
+x 365
+y 415
+w 225
+h 35
+fgColor index 0
+onColor index 24
+offColor index 22
+topShadowColor index 8
+botShadowColor index 10
+controlPv "BL15J-EA-HV-01:ABORT"
+pressValue "1"
+onLabel "ABORT"
+offLabel "ABORT"
+3d
+useEnumNumeric
+font "arial-bold-r-14.0"
 endObjectProperties
 

@@ -53,6 +53,9 @@ class Ioc:
             "OFF", always_update=True, on_update=self.k.source_off
         )
         self.cmd_on = builder.aOut("ON", always_update=True, on_update=self.k.source_on)
+        self.cmd_abort = builder.boolOut(
+            "ABORT", always_update=True, on_update=self.do_abort
+        )
 
         self.voltage_rbv = builder.aIn("VOLTAGE_RBV", EGU="Volts")
         self.current_rbv = builder.aIn("CURRENT_RBV", EGU="mA", PREC=4)
@@ -150,55 +153,80 @@ class Ioc:
         """
         self.abort_flag = False
 
+        on_voltage = self.on_setpoint.get()
+        off_voltage = self.off_setpoint.get()
+        # step_size = self.step_size.get()
+        rise_time = self.rise_time.get()
+        fall_time = self.fall_time.get()
+
+        repeats = self.repeats.get()
+
+        # on_cycle = on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_UP
+        # off_cycle = off_voltage, rise_time, Status.VOLTAGE_OFF, Status.RAMP_DOWN
+
         try:
             self.cycle_rbv.set(True)
-            # initially move to a bias-on state
-            # self.status_rbv.set(Status.RAMP_DOWN)
-            self.k.voltage_ramp_worker(
-                self.on_setpoint.get(), self.step_size.get(), self.fall_time.get()
-            )
-
-            step = self.step_size.get()
 
             for repeat in range(self.repeats.get()):
-                self.status_rbv.set(Status.VOLTAGE_ON)
-                if repeat > 0:
-                    cothread.Sleep(self.hold_time.get())
 
-                self.status_rbv.set(Status.RAMP_UP)
+                self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_UP)
+
+                # if repeat > 0:
+                #     cothread.Sleep(self.hold_time.get())
+
                 self.healthy_rbv.set(False)
-                self.k.voltage_ramp_worker(
-                    self.off_setpoint.get(), step, self.rise_time.get()
+                self.do_cycle(
+                    off_voltage, rise_time, Status.VOLTAGE_OFF, Status.RAMP_DOWN
                 )
-                if self.abort_flag:
-                    break
 
-                self.status_rbv.set(Status.VOLTAGE_OFF)
-                cothread.Sleep(self.hold_time.get())
-                if self.abort_flag:
-                    break
-
-                self.status_rbv.set(Status.RAMP_DOWN)
-                self.k.voltage_ramp_worker(
-                    self.on_setpoint.get(), step, self.fall_time.get()
-                )
-                if self.abort_flag:
-                    break
-
-            self.cycle_rbv.set(False)
+                self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_UP)
 
         except Exception as e:
             print("cycle failed", e, self.k.last_recv)
 
-    def set_voltage(self, volts: str) -> None:
-        self.k.set_voltage(float(volts))
+        finally:
+            self.cycle_rbv.set(False)
+
+    def do_cycle(
+        self,
+        voltage: float,
+        time: float,
+        voltage_status: int,
+        ramp_status: int,
+    ) -> None:
+
+        # voltage, time, voltage_status, ramp_status = args
+
+        step_size = self.step_size.get()
+
+        if not self.abort_flag:
+
+            # initially move to a bias-on state
+            # self.status_rbv.set(Status.RAMP_DOWN)
+            self.k.voltage_ramp_worker(voltage, step_size, time)
+
+            self.status_rbv.set(voltage_status)
+
+            cothread.Sleep(self.hold_time.get())
+
+            self.status_rbv.set(ramp_status)
+            self.healthy_rbv.set(False)
 
     def do_stop(self, stop: int) -> None:
+        if stop == 0:
+            self.stop_flag = False
+            self.cycle_rbv.set(True)
         if stop == 1:
+            self.stop_flag = True
+            self.cycle_rbv.set(False)
+
+    def do_abort(self, abort: int) -> None:
+        if abort == 1:
             self.abort_flag = True
-            self.k.abort()
+            self.cmd_abort.set(1)
             self.cycle_rbv.set(0)
-            self.status_rbv.set(Status.HOLD)
+            self.cmd_off.set(1)
+            self.status_rbv.set(Status.VOLTAGE_OFF)
 
     def do_ramp_on(self, start: bool) -> None:
         self.status_rbv.set(Status.RAMP_DOWN)

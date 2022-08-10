@@ -65,8 +65,9 @@ class Keithley(object):
             self.send_recv(self.startup_commands)
             self.last_recv = ""
         else:
-            # raise ValueError(f"Device Identifier not recognized:")  # {model}")
-            warnings.warn(f"Device Identifier not recognized: {model}")
+            warnings.warn(
+                f"Cannot connect to device. Identifier not recognized: {model}"
+            )
 
     def check_connected(self) -> Tuple[bool, Optional[str]]:
         # Check the connection
@@ -114,7 +115,7 @@ class Keithley(object):
     def source_on(self, _) -> None:
         self.send_recv(":OUTPUT:STATE ON")
 
-    def abort(self) -> None:
+    def abort(self, _) -> None:
         self.send_recv(":ABORT")
         # come out of sweep mode if we are in it
         self.sweep_seconds = 0
