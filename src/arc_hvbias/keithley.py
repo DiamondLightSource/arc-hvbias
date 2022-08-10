@@ -104,10 +104,26 @@ class Keithley(object):
         volts = math.fabs(volts) * -1
         resp = self.send_recv(f":SOURCE:VOLTAGE {volts}")
 
+    def get_vol_compliance(self) -> float:
+        vol_compl = self.send_recv(":SENSE:VOLTAGE:PROT:LEVEL?")
+        return float(vol_compl) if vol_compl is not None else 0.0
+
+    def set_vol_compliance(self, vol_compl: float) -> None:
+        vol_compl = math.fabs(vol_compl) * -1
+        resp = self.send_recv(f":SENSE:VOLTAGE:PROT:LEVEL {vol_compl}")
+
     def get_current(self) -> float:
         amps = self.send_recv(":SOURCE:CURRENT?")
         # make it mAmps
         return float(amps) * 1000 if amps is not None else 0.0
+
+    def get_cur_compliance(self) -> float:
+        cur_compl = self.send_recv(":SENSE:CURRENT:PROT:LEVEL?")
+        return float(cur_compl) * 1000 if cur_compl is not None else 0.0
+
+    def set_cur_compliance(self, cur_compl: float) -> None:
+        cur_compl = math.fabs(cur_compl) / 1000
+        resp = self.send_recv(f":SENSE:CURRENT:PROT:LEVEL {cur_compl}")
 
     def source_off(self, _) -> None:
         self.send_recv(":SOURCE:CLEAR:IMMEDIATE")

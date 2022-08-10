@@ -3,9 +3,9 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 106
-y 329
-w 1038
+x 86
+y 298
+w 1000
 h 475
 font "arial-medium-r-16.0"
 ctlFont "arial-bold-r-16.0"
@@ -31,10 +31,40 @@ beginObjectProperties
 major 4
 minor 0
 release 0
-x 625
-y 20
-w 245
-h 175
+x 15
+y 350
+w 310
+h 110
+lineColor index 14
+fill
+fillColor index 5
+endObjectProperties
+
+# (Rectangle)
+object activeRectangleClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 630
+y 15
+w 310
+h 125
+lineColor index 14
+fill
+fillColor index 5
+endObjectProperties
+
+# (Rectangle)
+object activeRectangleClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 630
+y 170
+w 240
+h 115
 lineColor index 14
 fill
 fillColor index 5
@@ -46,8 +76,8 @@ beginObjectProperties
 major 4
 minor 1
 release 0
-x 880
-y 400
+x 885
+y 415
 w 100
 h 35
 fgColor index 46
@@ -68,7 +98,7 @@ release 0
 x 15
 y 20
 w 310
-h 300
+h 310
 lineColor index 14
 fill
 fillColor index 5
@@ -124,7 +154,7 @@ x 145
 y 35
 w 170
 h 40
-controlPv "BL15J-EA-HV-01:VOLTAGE_RBV"
+controlPv "BL15J-EA-HV-01:VOLTAGE:RBV"
 fgColor index 16
 fgAlarm
 bgColor index 12
@@ -164,7 +194,7 @@ x 145
 y 85
 w 170
 h 40
-controlPv "BL15J-EA-HV-01:CURRENT_RBV"
+controlPv "BL15J-EA-HV-01:CURRENT:RBV"
 precision 4
 fgColor index 16
 fgAlarm
@@ -173,117 +203,6 @@ fill
 font "arial-bold-r-16.0"
 fontAlign "center"
 lineWidth 2
-endObjectProperties
-
-# (Rectangle)
-object activeRectangleClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 15
-y 335
-w 310
-h 125
-lineColor index 14
-fill
-fillColor index 5
-endObjectProperties
-
-# (Static Text)
-object activeXTextClass
-beginObjectProperties
-major 4
-minor 1
-release 1
-x 15
-y 330
-w 48
-h 13
-font "arial-medium-r-12.0"
-fgColor index 14
-bgColor index 8
-value {
-  "  Status  "
-}
-autoSize
-border
-endObjectProperties
-
-# (Byte)
-object ByteClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 35
-y 405
-w 25
-h 20
-controlPv "BL15J-EA-HV-01:OUTPUT_RBV"
-lineColor index 14
-onColor index 15
-offColor index 24
-lineWidth 2
-numBits 1
-endObjectProperties
-
-# (Static Text)
-object activeXTextClass
-beginObjectProperties
-major 4
-minor 1
-release 1
-x 70
-y 385
-w 52
-h 16
-font "arial-bold-r-14.0"
-fgColor index 14
-bgColor index 0
-useDisplayBg
-value {
-  "Healthy"
-}
-autoSize
-endObjectProperties
-
-# (Static Text)
-object activeXTextClass
-beginObjectProperties
-major 4
-minor 1
-release 1
-x 70
-y 410
-w 126
-h 16
-font "arial-bold-r-14.0"
-fgColor index 14
-bgColor index 0
-useDisplayBg
-value {
-  "Power Source On"
-}
-autoSize
-endObjectProperties
-
-# (Byte)
-object ByteClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 35
-y 380
-w 25
-h 20
-controlPv "BL15J-EA-HV-01:HEALTHY_RBV"
-lineColor index 14
-onColor index 15
-offColor index 24
-lineWidth 2
-numBits 1
 endObjectProperties
 
 # (Rectangle)
@@ -473,24 +392,6 @@ value {
 autoSize
 endObjectProperties
 
-# (Textentry)
-object TextentryClass
-beginObjectProperties
-major 10
-minor 0
-release 0
-x 145
-y 135
-w 170
-h 40
-controlPv "BL15J-EA-HV-01:ON-SETPOINT"
-displayMode "decimal"
-fgColor index 25
-bgColor index 3
-fill
-font "arial-bold-r-16.0"
-endObjectProperties
-
 # (Static Text)
 object activeXTextClass
 beginObjectProperties
@@ -521,7 +422,7 @@ x 145
 y 185
 w 170
 h 40
-controlPv "BL15J-EA-HV-01:OFF-SETPOINT"
+controlPv "BL15J-EA-HV-01:VOLTAGE:OFF-SETPOINT"
 displayMode "decimal"
 fgColor index 25
 bgColor index 3
@@ -635,44 +536,6 @@ value {
 autoSize
 endObjectProperties
 
-# (Static Text)
-object activeXTextClass
-beginObjectProperties
-major 4
-minor 1
-release 1
-x 70
-y 435
-w 150
-h 16
-font "arial-bold-r-14.0"
-fgColor index 14
-bgColor index 0
-useDisplayBg
-value {
-  "Depolarisation Cycle"
-}
-autoSize
-endObjectProperties
-
-# (Byte)
-object ByteClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 35
-y 430
-w 25
-h 20
-controlPv "BL15J-EA-HV-01:CYCLE_RBV"
-lineColor index 14
-onColor index 15
-offColor index 24
-lineWidth 2
-numBits 1
-endObjectProperties
-
 # (Message Button)
 object activeMessageButtonClass
 beginObjectProperties
@@ -767,8 +630,8 @@ beginObjectProperties
 major 4
 minor 1
 release 1
-x 625
-y 10
+x 630
+y 160
 w 130
 h 13
 font "arial-medium-r-12.0"
@@ -787,8 +650,8 @@ beginObjectProperties
 major 4
 minor 1
 release 1
-x 630
-y 45
+x 640
+y 195
 w 90
 h 16
 font "arial-bold-r-14.0"
@@ -807,8 +670,8 @@ beginObjectProperties
 major 10
 minor 0
 release 0
-x 745
-y 35
+x 750
+y 185
 w 110
 h 40
 controlPv "BL15J-EA-HV-01:MAX-TIME"
@@ -825,8 +688,8 @@ beginObjectProperties
 major 4
 minor 1
 release 1
-x 630
-y 95
+x 640
+y 245
 w 101
 h 16
 font "arial-bold-r-14.0"
@@ -845,8 +708,8 @@ beginObjectProperties
 major 10
 minor 0
 release 0
-x 745
-y 85
+x 750
+y 235
 w 110
 h 40
 controlPv "BL15J-EA-HV-01:TIME-SINCE"
@@ -859,26 +722,6 @@ fontAlign "center"
 lineWidth 2
 endObjectProperties
 
-# (Textupdate)
-object TextupdateClass
-beginObjectProperties
-major 10
-minor 0
-release 0
-x 165
-y 340
-w 155
-h 30
-controlPv "BL15J-EA-HV-01:STATUS"
-fgColor index 16
-fgAlarm
-bgColor index 12
-fill
-font "arial-bold-r-14.0"
-fontAlign "center"
-lineWidth 2
-endObjectProperties
-
 # (Message Button)
 object activeMessageButtonClass
 beginObjectProperties
@@ -886,10 +729,10 @@ major 4
 minor 1
 release 0
 x 635
-y 215
+y 305
 w 225
 h 35
-fgColor index 20
+fgColor index 18
 onColor index 4
 offColor index 3
 topShadowColor index 1
@@ -910,10 +753,10 @@ major 4
 minor 1
 release 0
 x 635
-y 265
+y 355
 w 225
 h 35
-fgColor index 25
+fgColor index 22
 onColor index 4
 offColor index 3
 topShadowColor index 1
@@ -925,44 +768,6 @@ offLabel "SOURCE OFF"
 3d
 useEnumNumeric
 font "arial-bold-r-14.0"
-endObjectProperties
-
-# (Static Text)
-object activeXTextClass
-beginObjectProperties
-major 4
-minor 1
-release 1
-x 70
-y 360
-w 77
-h 16
-font "arial-bold-r-14.0"
-fgColor index 14
-bgColor index 0
-useDisplayBg
-value {
-  "Connected"
-}
-autoSize
-endObjectProperties
-
-# (Byte)
-object ByteClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 35
-y 355
-w 25
-h 20
-controlPv "BL15J-EA-HV-01:CONNECTED"
-lineColor index 14
-onColor index 15
-offColor index 24
-lineWidth 2
-numBits 1
 endObjectProperties
 
 # (Message Button)
@@ -987,5 +792,355 @@ offLabel "ABORT"
 3d
 useEnumNumeric
 font "arial-bold-r-14.0"
+endObjectProperties
+
+# (Textupdate)
+object TextupdateClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 215
+y 360
+w 100
+h 40
+controlPv "BL15J-EA-HV-01:VOLTAGE:COMPLIANCE_RBV"
+fgColor index 16
+fgAlarm
+bgColor index 12
+fill
+font "arial-bold-r-16.0"
+fontAlign "center"
+lineWidth 2
+endObjectProperties
+
+# (Textentry)
+object TextentryClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 145
+y 135
+w 170
+h 40
+controlPv "BL15J-EA-HV-01:VOLTAGE:ON-SETPOINT"
+displayMode "decimal"
+fgColor index 25
+bgColor index 3
+fill
+font "arial-bold-r-16.0"
+endObjectProperties
+
+# (Textentry)
+object TextentryClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 120
+y 360
+w 85
+h 40
+controlPv "BL15J-EA-HV-01:VOLTAGE:COMPLIANCE"
+displayMode "decimal"
+fgColor index 25
+bgColor index 3
+fill
+font "arial-bold-r-16.0"
+endObjectProperties
+
+# (Textentry)
+object TextentryClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 120
+y 410
+w 85
+h 40
+controlPv "BL15J-EA-HV-01:CURRENT:COMPLIANCE"
+displayMode "decimal"
+precision 4
+fgColor index 25
+bgColor index 3
+fill
+font "arial-bold-r-16.0"
+endObjectProperties
+
+# (Textupdate)
+object TextupdateClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 215
+y 410
+w 100
+h 40
+controlPv "BL15J-EA-HV-01:CURRENT:COMPLIANCE_RBV"
+precision 4
+fgColor index 16
+fgAlarm
+bgColor index 12
+fill
+font "arial-bold-r-16.0"
+fontAlign "center"
+lineWidth 2
+endObjectProperties
+
+# (Byte)
+object ByteClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 650
+y 35
+w 25
+h 20
+controlPv "BL15J-EA-HV-01:CONNECTED"
+lineColor index 14
+onColor index 15
+offColor index 24
+lineWidth 2
+numBits 1
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 685
+y 40
+w 77
+h 16
+font "arial-bold-r-14.0"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+value {
+  "Connected"
+}
+autoSize
+endObjectProperties
+
+# (Textupdate)
+object TextupdateClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 780
+y 20
+w 155
+h 30
+controlPv "BL15J-EA-HV-01:STATUS"
+fgColor index 16
+fgAlarm
+bgColor index 12
+fill
+font "arial-bold-r-14.0"
+fontAlign "center"
+lineWidth 2
+endObjectProperties
+
+# (Byte)
+object ByteClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 650
+y 110
+w 25
+h 20
+controlPv "BL15J-EA-HV-01:CYCLE_RBV"
+lineColor index 14
+onColor index 15
+offColor index 24
+lineWidth 2
+numBits 1
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 685
+y 115
+w 150
+h 16
+font "arial-bold-r-14.0"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+value {
+  "Depolarisation Cycle"
+}
+autoSize
+endObjectProperties
+
+# (Byte)
+object ByteClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 650
+y 60
+w 25
+h 20
+controlPv "BL15J-EA-HV-01:HEALTHY_RBV"
+lineColor index 14
+onColor index 15
+offColor index 24
+lineWidth 2
+numBits 1
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 685
+y 90
+w 126
+h 16
+font "arial-bold-r-14.0"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+value {
+  "Power Source On"
+}
+autoSize
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 685
+y 65
+w 52
+h 16
+font "arial-bold-r-14.0"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+value {
+  "Healthy"
+}
+autoSize
+endObjectProperties
+
+# (Byte)
+object ByteClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 650
+y 85
+w 25
+h 20
+controlPv "BL15J-EA-HV-01:OUTPUT_RBV"
+lineColor index 14
+onColor index 15
+offColor index 24
+lineWidth 2
+numBits 1
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 630
+y 10
+w 48
+h 13
+font "arial-medium-r-12.0"
+fgColor index 14
+bgColor index 8
+value {
+  "  Status  "
+}
+autoSize
+border
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 15
+y 340
+w 75
+h 13
+font "arial-medium-r-12.0"
+fgColor index 14
+bgColor index 8
+value {
+  "  Compliance"
+}
+autoSize
+border
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 25
+y 365
+w 87
+h 32
+font "arial-bold-r-14.0"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+value {
+  "  Voltage"
+  "Compliance"
+}
+autoSize
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 25
+y 415
+w 87
+h 32
+font "arial-bold-r-14.0"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+value {
+  "  Current"
+  "Compliance"
+}
+autoSize
 endObjectProperties
 

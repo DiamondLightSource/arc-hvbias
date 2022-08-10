@@ -57,8 +57,12 @@ class Ioc:
             "ABORT", always_update=True, on_update=self.do_abort
         )
 
-        self.voltage_rbv = builder.aIn("VOLTAGE_RBV", EGU="Volts")
-        self.current_rbv = builder.aIn("CURRENT_RBV", EGU="mA", PREC=4)
+        self.voltage_rbv = builder.aIn("VOLTAGE:RBV", EGU="Volts")
+        self.current_rbv = builder.aIn("CURRENT:RBV", EGU="mA", PREC=4)
+        self.vol_compliance_rbv = builder.aIn("VOLTAGE:COMPLIANCE_RBV", EGU="V")
+        self.cur_compliance_rbv = builder.aIn(
+            "CURRENT:COMPLIANCE_RBV", EGU="mA", PREC=4
+        )
         self.output_rbv = builder.mbbIn("OUTPUT_RBV", "OFF", "ON")
         self.status_rbv = builder.mbbIn("STATUS", *Status.__members__)
         self.healthy_rbv = builder.mbbIn("HEALTHY_RBV", "UNHEALTHY", "HEALTHY")
@@ -66,8 +70,16 @@ class Ioc:
         self.time_since_rbv = builder.longIn("TIME-SINCE", EGU="Sec")
 
         # create some input records (for IOC inputs)
-        self.on_setpoint = builder.aOut("ON-SETPOINT", initial_value=500, EGU="Volts")
-        self.off_setpoint = builder.aOut("OFF-SETPOINT", EGU="Volts")
+        self.on_setpoint = builder.aOut(
+            "VOLTAGE:ON-SETPOINT", initial_value=500, EGU="Volts"
+        )
+        self.off_setpoint = builder.aOut("VOLTAGE:OFF-SETPOINT", EGU="Volts")
+        self.vol_compliance = builder.aOut(
+            "VOLTAGE:COMPLIANCE", EGU="Volts", on_update=self.k.set_vol_compliance
+        )
+        self.cur_compliance = builder.aOut(
+            "CURRENT:COMPLIANCE", EGU="mA", on_update=self.k.set_cur_compliance
+        )
         self.rise_time = builder.aOut("RISE-TIME", initial_value=2, EGU="Sec", PREC=2)
         self.hold_time = builder.aOut("HOLD-TIME", initial_value=3, EGU="Sec", PREC=2)
         self.fall_time = builder.aOut("FALL-TIME", initial_value=2, EGU="Sec", PREC=2)
@@ -116,6 +128,8 @@ class Ioc:
                 try:
                     self.voltage_rbv.set(self.k.get_voltage())
                     self.current_rbv.set(self.k.get_current())
+                    self.vol_compliance_rbv.set(self.k.get_vol_compliance())
+                    self.cur_compliance_rbv.set(self.k.get_cur_compliance())
                     self.output_rbv.set(self.k.get_source_status())
 
                     # calculate housekeeping readbacks
