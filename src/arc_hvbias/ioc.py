@@ -67,7 +67,7 @@ class Ioc:
         self.status_rbv = builder.mbbIn("STATUS", *Status.__members__)
         self.healthy_rbv = builder.mbbIn("HEALTHY_RBV", "UNHEALTHY", "HEALTHY")
         self.cycle_rbv = builder.mbbIn("CYCLE_RBV", "IDLE", "RUNNING")
-        self.time_since_rbv = builder.longIn("TIME-SINCE", EGU="Sec")
+        self.time_since_rbv = builder.longIn("TIME-SINCE", EGU="Sec", initial_value=0)
 
         # create some input records (for IOC inputs)
         self.on_setpoint = builder.aOut(
@@ -95,19 +95,22 @@ class Ioc:
         self.max_time = builder.longOut("MAX-TIME", initial_value=900)
 
         # other state variables
-        self.last_time = datetime.now()
+        self.last_time = 0  # datetime.now()
         self.last_transition = datetime.now()
+        self.pause_flag = False
         self.stop_flag = False
-        self.abort_flag = False
+        self.cycle_flag = False
 
         # Boilerplate get the IOC started
         builder.LoadDatabase()
         softioc.iocInit()
 
-        self.pause_update = cothread.Event()
+        self.pause_param_update = cothread.Event()
+        self.pause_cycle_update = cothread.Event()
         self.pause_cycle = cothread.Event()
 
-        cothread.Spawn(self.update)
+        cothread.Spawn(self.param_update)
+        cothread.Spawn(self.cycle_update)
         cothread.Spawn(self.connection_check)
         # Finally leave the IOC running with an interactive shell.
         softioc.interactive_ioc(globals())
@@ -124,11 +127,11 @@ class Ioc:
                     print(f"Connected to device: {model}")
                     cothread.Sleep(0.5)
                     self.connected.set(1)
-                    self.pause_update.Signal()
+                    self.pause_param_update.Signal()
             cothread.Sleep(0.5)
 
     # main update loop
-    def update(self) -> None:
+    def param_update(self) -> None:
         while True:
             if self.connected.get() == 1:
                 try:
@@ -145,15 +148,6 @@ class Ioc:
                     )
                     self.healthy_rbv.set(healthy)
 
-                    if self.voltage_rbv.get() == -math.fabs(self.off_setpoint.get()):
-                        self.last_time = datetime.now()
-                    since = (datetime.now() - self.last_time).total_seconds()
-                    self.time_since_rbv.set(int(since))
-
-                    # if max time exceeded since last depolarise then force a cycle
-                    if since > self.max_time.get():
-                        self.do_start_cycle(do=1)
-
                     # update loop at 2 Hz
                     cothread.Sleep(0.5)
                 except ValueError as e:
@@ -163,10 +157,39 @@ class Ioc:
             else:
                 # Pause thread while not connected to device
                 cothread.Sleep(0.001)
-                self.pause_update.Wait()
+                self.pause_param_update.Wait()
+
+    def cycle_update(self) -> None:
+        while True:
+            if self.connected.get() == 1 and not self.stop_flag:
+                try:
+                    if self.cycle_flag == 1:
+                        if self.voltage_rbv.get() == -math.fabs(
+                            self.off_setpoint.get()
+                        ):
+                            self.last_time = datetime.now()
+                    if self.last_time != 0:
+                        since = (datetime.now() - self.last_time).total_seconds()
+                        self.time_since_rbv.set(int(since))
+
+                        # if max time exceeded since last depolarise then force a cycle
+                        if since > self.max_time.get():
+                            self.do_start_cycle(do=1)
+
+                    # update loop at 2 Hz
+                    cothread.Sleep(0.5)
+                except Exception as e:
+                    # catch errors
+                    warnings.warn(f"{e}, {self.k.last_recv}")
+                    cothread.Yield()
+            else:
+                # Pause thread while not connected to device
+                cothread.Sleep(0.001)
+                self.pause_cycle_update.AbortWait()
 
     def do_start_cycle(self, do: int) -> None:
         if do == 1 and not self.cycle_rbv.get():
+            self.cycle_flag = True
             cothread.Spawn(self.cycle_control)
 
     def cycle_control(self) -> None:
@@ -175,40 +198,40 @@ class Ioc:
         or after max time
         """
         self.stop_flag = False
+        self.pause_cycle_update.Signal()
 
         on_voltage = self.on_setpoint.get()
         off_voltage = self.off_setpoint.get()
-        # step_size = self.step_size.get()
         rise_time = self.rise_time.get()
         fall_time = self.fall_time.get()
 
         repeats = self.repeats.get()
 
-        # on_cycle = on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_UP
-        # off_cycle = off_voltage, rise_time, Status.VOLTAGE_OFF, Status.RAMP_DOWN
-
         try:
             self.cycle_rbv.set(True)
 
-            for repeat in range(self.repeats.get()):
+            for repeat in range(repeats):
 
                 self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_UP)
 
-                # if repeat > 0:
-                #     cothread.Sleep(self.hold_time.get())
-
-                self.healthy_rbv.set(False)
                 self.do_cycle(
                     off_voltage, rise_time, Status.VOLTAGE_OFF, Status.RAMP_DOWN
                 )
 
                 self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_UP)
 
-        except Exception as e:
-            print("cycle failed", e, self.k.last_recv)
+                self.do_cycle(
+                    off_voltage, rise_time, Status.VOLTAGE_OFF, Status.RAMP_DOWN
+                )
+
+        except RuntimeError as e:
+            self.k.voltage_ramp_worker(off_voltage, self.step_size.get(), rise_time)
+            self.status_rbv.set(Status.VOLTAGE_OFF)
+            print("cycle failed:", e)
 
         finally:
             self.cycle_rbv.set(False)
+            self.cycle_flag = False
 
     def do_cycle(
         self,
@@ -217,8 +240,6 @@ class Ioc:
         voltage_status: int,
         ramp_status: int,
     ) -> None:
-
-        # voltage, time, voltage_status, ramp_status = args
 
         step_size = self.step_size.get()
 
@@ -236,7 +257,8 @@ class Ioc:
             cothread.Sleep(self.hold_time.get())
 
             self.status_rbv.set(ramp_status)
-            self.healthy_rbv.set(False)
+        else:
+            raise RuntimeError("Abort called.")
 
     def do_pause(self, pause: int) -> None:
         if pause == 0:
