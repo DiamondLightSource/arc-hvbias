@@ -43,8 +43,8 @@ class Ioc:
         self.cmd_cycle = builder.boolOut(
             "CYCLE", always_update=True, on_update=self.do_start_cycle
         )
-        self.cmd_stop = builder.boolOut(
-            "STOP", always_update=True, on_update=self.do_stop
+        self.cmd_pause = builder.boolOut(
+            "PAUSE", always_update=True, on_update=self.do_pause
         )
         self.cmd_voltage = builder.aOut(
             "VOLTAGE", always_update=True, on_update=self.k.set_voltage
@@ -53,8 +53,8 @@ class Ioc:
             "OFF", always_update=True, on_update=self.k.source_off
         )
         self.cmd_on = builder.aOut("ON", always_update=True, on_update=self.k.source_on)
-        self.cmd_abort = builder.boolOut(
-            "ABORT", always_update=True, on_update=self.do_abort
+        self.cmd_stop = builder.boolOut(
+            "STOP", always_update=True, on_update=self.do_stop
         )
 
         self.voltage_rbv = builder.aIn("VOLTAGE:RBV", EGU="Volts")
@@ -75,10 +75,16 @@ class Ioc:
         )
         self.off_setpoint = builder.aOut("VOLTAGE:OFF-SETPOINT", EGU="Volts")
         self.vol_compliance = builder.aOut(
-            "VOLTAGE:COMPLIANCE", EGU="Volts", on_update=self.k.set_vol_compliance
+            "VOLTAGE:COMPLIANCE",
+            EGU="Volts",
+            initial_value=21,
+            on_update=self.k.set_vol_compliance,
         )
         self.cur_compliance = builder.aOut(
-            "CURRENT:COMPLIANCE", EGU="mA", on_update=self.k.set_cur_compliance
+            "CURRENT:COMPLIANCE",
+            EGU="mA",
+            initial_value=0.105,
+            on_update=self.k.set_cur_compliance,
         )
         self.rise_time = builder.aOut("RISE-TIME", initial_value=2, EGU="Sec", PREC=2)
         self.hold_time = builder.aOut("HOLD-TIME", initial_value=3, EGU="Sec", PREC=2)
@@ -168,7 +174,7 @@ class Ioc:
         Continuously perform a depolarisation cycle when the detector is idle
         or after max time
         """
-        self.abort_flag = False
+        self.stop_flag = False
 
         on_voltage = self.on_setpoint.get()
         off_voltage = self.off_setpoint.get()
@@ -216,10 +222,10 @@ class Ioc:
 
         step_size = self.step_size.get()
 
-        if self.stop_flag:
+        if self.pause_flag:
             self.pause_cycle.Wait()
 
-        if not self.abort_flag:
+        if not self.stop_flag:
 
             # initially move to a bias-on state
             # self.status_rbv.set(Status.RAMP_DOWN)
@@ -232,19 +238,19 @@ class Ioc:
             self.status_rbv.set(ramp_status)
             self.healthy_rbv.set(False)
 
-    def do_stop(self, stop: int) -> None:
-        if stop == 0:
-            self.stop_flag = False
+    def do_pause(self, pause: int) -> None:
+        if pause == 0:
+            self.pause_flag = False
             self.cycle_rbv.set(True)
             self.pause_cycle.Signal()
-        if stop == 1:
-            self.stop_flag = True
+        if pause == 1:
+            self.pause_flag = True
             self.cycle_rbv.set(False)
 
-    def do_abort(self, abort: int) -> None:
-        if abort == 1:
-            self.abort_flag = True
-            self.cmd_abort.set(1)
+    def do_stop(self, stop: int) -> None:
+        if stop == 1:
+            self.stop_flag = True
+            self.k.abort()
             self.cycle_rbv.set(0)
             self.cmd_off.set(1)
             self.status_rbv.set(Status.VOLTAGE_OFF)

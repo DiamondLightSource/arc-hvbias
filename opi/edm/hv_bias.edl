@@ -3,8 +3,8 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 86
-y 298
+x 192
+y 310
 w 1000
 h 475
 font "arial-medium-r-16.0"
@@ -613,7 +613,7 @@ onColor index 4
 offColor index 3
 topShadowColor index 1
 botShadowColor index 11
-controlPv "BL15J-EA-HV-01:STOP"
+controlPv "BL15J-EA-HV-01:PAUSE"
 pressValue "1"
 releaseValue "0"
 onLabel "RESUME"
@@ -785,10 +785,10 @@ onColor index 24
 offColor index 22
 topShadowColor index 8
 botShadowColor index 10
-controlPv "BL15J-EA-HV-01:ABORT"
+controlPv "BL15J-EA-HV-01:STOP"
 pressValue "1"
-onLabel "ABORT"
-offLabel "ABORT"
+onLabel "STOP"
+offLabel "STOP"
 3d
 useEnumNumeric
 font "arial-bold-r-14.0"

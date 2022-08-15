@@ -131,7 +131,7 @@ class Keithley(object):
     def source_on(self, _) -> None:
         self.send_recv(":OUTPUT:STATE ON")
 
-    def abort(self, _) -> None:
+    def abort(self) -> None:
         self.send_recv(":ABORT")
         # come out of sweep mode if we are in it
         self.sweep_seconds = 0
