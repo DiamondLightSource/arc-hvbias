@@ -38,9 +38,6 @@ class Keithley(object):
 
     def connect(self) -> None:
 
-        if self._comms._socket.getpeername() is None:
-            self.disconnect()
-
         self._comms.connect()
 
         self._comms.send_receive(b"")
