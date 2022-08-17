@@ -38,13 +38,13 @@ class Keithley(object):
 
     def connect(self) -> None:
 
-        if self._comms is not None:
+        if self._comms._socket.getpeername() is None:
             self.disconnect()
 
         self._comms.connect()
 
-        self._comms.send_receive("")
-        self._comms.send_receive("*RST")
+        self._comms.send_receive(b"")
+        self._comms.send_receive(b"*RST")
 
         is_connected, model = self.check_connected()
         if is_connected:
@@ -52,14 +52,12 @@ class Keithley(object):
             self._comms.send_receive(self.startup_commands)
             self.last_recv = ""
         else:
-            warnings.warn(
-                f"Cannot connect to device. Identifier not recognized: {model}"
-            )
+            warnings.warn("Cannot connect to device. Identifier not recognized.")
 
-    def check_connected(self) -> Tuple[bool, Optional[str]]:
+    def check_connected(self) -> Tuple[bool, Optional[bytes]]:
         # Check the connection
-        model = self._comms.send_receive("*idn?")
-        if model is None or "MODEL 24" not in model:
+        model = self._comms.send_receive(b"*idn?")
+        if model is None or b"MODEL 24" not in model:
             return False, None
         return True, model
 
@@ -67,49 +65,53 @@ class Keithley(object):
         self._comms.disconnect()
 
     def get_voltage(self) -> float:
-        volts = self._comms.send_receive(":SOURCE:VOLTAGE?")
+        volts = self._comms.send_receive(b":SOURCE:VOLTAGE?")
         return float(volts) if volts is not None else 0.0
 
     def set_voltage(self, volts: float) -> None:
         # only allow negative voltages
         volts = math.fabs(volts) * -1
-        resp = self._comms.send_receive(f":SOURCE:VOLTAGE {volts}")
+        resp = self._comms.send_receive(f":SOURCE:VOLTAGE {volts}".encode())
 
     def get_vol_compliance(self) -> float:
-        vol_compl = self._comms.send_receive(":SENSE:VOLTAGE:PROT:LEVEL?")
+        vol_compl = self._comms.send_receive(b":SENSE:VOLTAGE:PROT:LEVEL?")
         return float(vol_compl) if vol_compl is not None else 0.0
 
     def set_vol_compliance(self, vol_compl: float) -> None:
         vol_compl = math.fabs(vol_compl) * -1
-        resp = self._comms.send_receive(f":SENSE:VOLTAGE:PROT:LEVEL {vol_compl}")
+        resp = self._comms.send_receive(
+            f":SENSE:VOLTAGE:PROT:LEVEL {vol_compl}".encode()
+        )
 
     def get_current(self) -> float:
-        amps = self._comms.send_receive(":SOURCE:CURRENT?")
+        amps = self._comms.send_receive(b":SOURCE:CURRENT?")
         # make it mAmps
         return float(amps) * 1000 if amps is not None else 0.0
 
     def get_cur_compliance(self) -> float:
-        cur_compl = self._comms.send_receive(":SENSE:CURRENT:PROT:LEVEL?")
+        cur_compl = self._comms.send_receive(b":SENSE:CURRENT:PROT:LEVEL?")
         return float(cur_compl) * 1000 if cur_compl is not None else 0.0
 
     def set_cur_compliance(self, cur_compl: float) -> None:
         cur_compl = math.fabs(cur_compl) / 1000
-        resp = self._comms.send_receive(f":SENSE:CURRENT:PROT:LEVEL {cur_compl}")
+        resp = self._comms.send_receive(
+            f":SENSE:CURRENT:PROT:LEVEL {cur_compl}".encode()
+        )
 
     def source_off(self, _) -> None:
-        self._comms.send_receive(":SOURCE:CLEAR:IMMEDIATE")
+        self._comms.send_receive(b":SOURCE:CLEAR:IMMEDIATE")
 
     def source_on(self, _) -> None:
-        self._comms.send_receive(":OUTPUT:STATE ON")
+        self._comms.send_receive(b":OUTPUT:STATE ON")
 
     def abort(self) -> None:
-        self._comms.send_receive(":ABORT")
+        self._comms.send_receive(b":ABORT")
         # come out of sweep mode if we are in it
         self.sweep_seconds = 0
         self.abort_flag = True
 
     def get_source_status(self) -> int:
-        result = self._comms.send_receive(":OUTPUT:STATE?")
+        result = self._comms.send_receive(b":OUTPUT:STATE?")
         return int(result) if result is not None else 0
 
     def source_voltage_ramp(
@@ -145,17 +147,17 @@ class Keithley(object):
         step_size = difference / steps
         interval = seconds / steps - LOOP_OVERHEAD
 
-        self._comms.send_receive(":SOURCE:FUNCTION:MODE VOLTAGE")
-        self._comms.send_receive(":SOURCE:VOLTAGE:MODE FIXED")
+        self._comms.send_receive(b":SOURCE:FUNCTION:MODE VOLTAGE")
+        self._comms.send_receive(b":SOURCE:VOLTAGE:MODE FIXED")
         for step in range(steps + 1):
             if self.abort_flag:
                 break
-            self._comms.send_receive(f":SOURCE:VOLTAGE {voltage}")
+            self._comms.send_receive(f":SOURCE:VOLTAGE {voltage}".encode())
             self.get_voltage()
             voltage += step_size
             cothread.Sleep(interval)
 
-    startup_commands = """
+    startup_commands = b"""
 :syst:beep:stat 0
 :SENSE:FUNCTION:ON  "CURRENT:DC","VOLTAGE:DC"
 :SENSE:CURRENT:RANGE:AUTO 1
