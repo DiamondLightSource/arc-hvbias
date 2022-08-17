@@ -1,6 +1,7 @@
 import math
 import warnings
 from datetime import datetime
+from typing import Union
 
 import cothread
 
@@ -19,13 +20,17 @@ class Ioc:
     A Soft IOC to provide the PVs to control and monitor the Keithley class
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        ip: str = "192.168.0.1",
+        port: int = 8080,
+    ):
         # promote the (single) instance for access via commandline
         global ioc
         ioc = self
 
         # connect to the Keithley via serial
-        self.k = Keithley()
+        self.k = Keithley(ip, port)
 
         # Set the record prefix
         builder.SetDeviceName("BL15J-EA-HV-01")
@@ -95,7 +100,7 @@ class Ioc:
         self.max_time = builder.longOut("MAX-TIME", initial_value=900)
 
         # other state variables
-        self.last_time = 0  # datetime.now()
+        self.last_time: datetime = datetime.fromtimestamp(0)
         self.last_transition = datetime.now()
         self.pause_flag = False
         self.stop_flag = False
@@ -168,7 +173,7 @@ class Ioc:
                             self.off_setpoint.get()
                         ):
                             self.last_time = datetime.now()
-                    if self.last_time != 0:
+                    if self.last_time != datetime.fromtimestamp(0):
                         since = (datetime.now() - self.last_time).total_seconds()
                         self.time_since_rbv.set(int(since))
 

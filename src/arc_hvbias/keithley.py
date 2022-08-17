@@ -5,10 +5,11 @@ to command and query the device
 import math
 import warnings
 from datetime import datetime
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import cothread
-import serial
+
+from .comms import Comms
 
 MAX_HZ = 20
 LOOP_OVERHEAD = 0.03
@@ -17,17 +18,13 @@ LOOP_OVERHEAD = 0.03
 class Keithley(object):
     def __init__(
         self,
-        port: str = "/dev/ttyS0",
-        baud: int = 38400,
-        bytesize: int = 8,
-        parity: str = "N",
+        ip: str = "192.168.0.1",
+        port: int = 8080,
     ) -> None:
 
-        self.port = port
-        self.baud = baud
-        self.bytesize = bytesize
-        self.parity = parity
-        self.ser: serial.Serial = None
+        self._ip = ip
+        self._port = port
+        self._comms: Comms = Comms(self._ip, self._port)
 
         self.sweep_start = datetime.now()
         self.sweep_seconds = 0.0
@@ -36,33 +33,23 @@ class Keithley(object):
         self.connect()
 
     def __del__(self) -> None:
-        if hasattr(self, "connection"):
-            self.ser.close()
+        if self._comms is not None:
+            self._comms.disconnect()
 
     def connect(self) -> None:
 
-        if self.ser is not None:
+        if self._comms is not None:
             self.disconnect()
 
-        self.ser = serial.Serial(
-            self.port,
-            self.baud,
-            bytesize=self.bytesize,
-            parity=self.parity,
-            timeout=1,
-        )
+        self._comms.connect()
 
-        # make sure buffers are clear
-        self.ser.reset_input_buffer()
-        self.ser.reset_output_buffer()
-
-        # self.send_recv("")
-        self.send_recv("*RST")
+        self._comms.send_receive("")
+        self._comms.send_receive("*RST")
 
         is_connected, model = self.check_connected()
         if is_connected:
             # set up useful defaults
-            self.send_recv(self.startup_commands)
+            self._comms.send_receive(self.startup_commands)
             self.last_recv = ""
         else:
             warnings.warn(
@@ -71,74 +58,58 @@ class Keithley(object):
 
     def check_connected(self) -> Tuple[bool, Optional[str]]:
         # Check the connection
-        model = self.send_recv("*idn?")
+        model = self._comms.send_receive("*idn?")
         if model is None or "MODEL 24" not in model:
             return False, None
         return True, model
 
-    def disconnect(self) -> None:
-        if self.ser.isOpen():
-            self.ser.close()
-        del self.ser
-
-    def send_recv(self, send: str, respond: bool = False) -> Union[str, None]:
-
-        self.ser.write((send + "\n").encode())
-
-        if respond or send.endswith("?"):
-            try:
-                self.last_recv = self.ser.readline(100).decode()
-                response = self.last_recv
-                return response
-            except UnicodeDecodeError as e:
-                warnings.warn(f"{e}")
-
-        return None
+    def disconnect(self):
+        self._comms.disconnect()
 
     def get_voltage(self) -> float:
-        volts = self.send_recv(":SOURCE:VOLTAGE?")
+        volts = self._comms.send_receive(":SOURCE:VOLTAGE?")
         return float(volts) if volts is not None else 0.0
 
     def set_voltage(self, volts: float) -> None:
         # only allow negative voltages
         volts = math.fabs(volts) * -1
-        resp = self.send_recv(f":SOURCE:VOLTAGE {volts}")
+        resp = self._comms.send_receive(f":SOURCE:VOLTAGE {volts}")
 
     def get_vol_compliance(self) -> float:
-        vol_compl = self.send_recv(":SENSE:VOLTAGE:PROT:LEVEL?")
+        vol_compl = self._comms.send_receive(":SENSE:VOLTAGE:PROT:LEVEL?")
         return float(vol_compl) if vol_compl is not None else 0.0
 
     def set_vol_compliance(self, vol_compl: float) -> None:
         vol_compl = math.fabs(vol_compl) * -1
-        resp = self.send_recv(f":SENSE:VOLTAGE:PROT:LEVEL {vol_compl}")
+        resp = self._comms.send_receive(f":SENSE:VOLTAGE:PROT:LEVEL {vol_compl}")
 
     def get_current(self) -> float:
-        amps = self.send_recv(":SOURCE:CURRENT?")
+        amps = self._comms.send_receive(":SOURCE:CURRENT?")
         # make it mAmps
         return float(amps) * 1000 if amps is not None else 0.0
 
     def get_cur_compliance(self) -> float:
-        cur_compl = self.send_recv(":SENSE:CURRENT:PROT:LEVEL?")
+        cur_compl = self._comms.send_receive(":SENSE:CURRENT:PROT:LEVEL?")
         return float(cur_compl) * 1000 if cur_compl is not None else 0.0
 
     def set_cur_compliance(self, cur_compl: float) -> None:
         cur_compl = math.fabs(cur_compl) / 1000
-        resp = self.send_recv(f":SENSE:CURRENT:PROT:LEVEL {cur_compl}")
+        resp = self._comms.send_receive(f":SENSE:CURRENT:PROT:LEVEL {cur_compl}")
 
     def source_off(self, _) -> None:
-        self.send_recv(":SOURCE:CLEAR:IMMEDIATE")
+        self._comms.send_receive(":SOURCE:CLEAR:IMMEDIATE")
 
     def source_on(self, _) -> None:
-        self.send_recv(":OUTPUT:STATE ON")
+        self._comms.send_receive(":OUTPUT:STATE ON")
 
     def abort(self) -> None:
-        self.send_recv(":ABORT")
+        self._comms.send_receive(":ABORT")
         # come out of sweep mode if we are in it
         self.sweep_seconds = 0
         self.abort_flag = True
 
     def get_source_status(self) -> int:
-        result = self.send_recv(":OUTPUT:STATE?")
+        result = self._comms.send_receive(":OUTPUT:STATE?")
         return int(result) if result is not None else 0
 
     def source_voltage_ramp(
@@ -174,12 +145,12 @@ class Keithley(object):
         step_size = difference / steps
         interval = seconds / steps - LOOP_OVERHEAD
 
-        self.send_recv(":SOURCE:FUNCTION:MODE VOLTAGE")
-        self.send_recv(":SOURCE:VOLTAGE:MODE FIXED")
+        self._comms.send_receive(":SOURCE:FUNCTION:MODE VOLTAGE")
+        self._comms.send_receive(":SOURCE:VOLTAGE:MODE FIXED")
         for step in range(steps + 1):
             if self.abort_flag:
                 break
-            self.send_recv(f":SOURCE:VOLTAGE {voltage}")
+            self._comms.send_receive(f":SOURCE:VOLTAGE {voltage}")
             self.get_voltage()
             voltage += step_size
             cothread.Sleep(interval)
