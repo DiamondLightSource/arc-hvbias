@@ -82,6 +82,10 @@ class Comms:
             self._send(request)
 
         ready = select.select([self._socket], [], [], TIMEOUT)
+        sock_opt = self._socket.getsockopt()
+
+        if sock_opt != 0:
+            raise RuntimeError(sock_opt)
 
         if request.endswith(b"?") and ready[0]:
             try:
