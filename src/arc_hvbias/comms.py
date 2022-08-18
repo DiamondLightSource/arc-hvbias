@@ -1,6 +1,7 @@
 # import logging
 import socket
 import warnings
+import select
 from typing import Optional, Tuple, Union
 
 import cothread
@@ -8,7 +9,7 @@ import cothread
 # Constants
 CR = b"\r"
 CODEC = "ascii"
-TIMEOUT = 1.0  # Seconds
+TIMEOUT = 2.0  # Seconds
 RECV_BUFFER = 4096  # Bytes
 
 
@@ -21,6 +22,7 @@ class Comms:
         self._endpoint = (ip, port)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.settimeout(TIMEOUT)
+        self._socket.setblocking(0)
         self._lock = cothread.RLock()
 
     def connect(self):
@@ -79,7 +81,9 @@ class Comms:
         with self._lock:
             self._send(request)
 
-        if request.endswith(b"?"):
+        ready = select.select([self._socket], [], [], TIMEOUT)
+
+        if request.endswith(b"?") and ready[0]:
             try:
                 response = self._socket.recv(RECV_BUFFER)
                 return response
