@@ -9,7 +9,7 @@ import cothread
 CR = b"\r"
 CODEC = "ascii"
 TIMEOUT = 1.0  # Seconds
-RECV_BUFFER = 4096  # Bytes
+RECV_BUFFER = 100  # Bytes
 
 
 class Comms:
