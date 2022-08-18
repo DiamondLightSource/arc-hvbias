@@ -40,8 +40,8 @@ class Keithley(object):
 
         self._comms.connect()
 
-        self._comms.send_receive("".encode("utf-8"))
-        self._comms.send_receive("*RST".encode("utf-8"))
+        self._comms.send_receive("".encode("ascii"))
+        self._comms.send_receive("*RST".encode("ascii"))
 
         is_connected, model = self.check_connected()
         if is_connected:
@@ -53,7 +53,7 @@ class Keithley(object):
 
     def check_connected(self) -> Tuple[bool, Optional[bytes]]:
         # Check the connection
-        model = self._comms.send_receive("*idn?".encode("utf-8"))
+        model = self._comms.send_receive("*idn?".encode("ascii"))
         if model is None or "MODEL 24" not in model.decode():
             return False, None
         return True, model
@@ -62,57 +62,57 @@ class Keithley(object):
         self._comms.disconnect()
 
     def get_voltage(self) -> float:
-        volts = self._comms.send_receive(":SOURCE:VOLTAGE?".encode("utf-8"))
+        volts = self._comms.send_receive(":SOURCE:VOLTAGE?".encode("ascii"))
         return float(volts.decode()) if volts is not None else 0.0
 
     def set_voltage(self, volts: float) -> None:
         # only allow negative voltages
         volts = math.fabs(volts) * -1
-        resp = self._comms.send_receive(f":SOURCE:VOLTAGE {volts}".encode("utf-8"))
+        resp = self._comms.send_receive(f":SOURCE:VOLTAGE {volts}".encode("ascii"))
 
     def get_vol_compliance(self) -> float:
         vol_compl = self._comms.send_receive(
-            ":SENSE:VOLTAGE:PROT:LEVEL?".encode("utf-8")
+            ":SENSE:VOLTAGE:PROT:LEVEL?".encode("ascii")
         )
         return float(vol_compl.decode()) if vol_compl is not None else 0.0
 
     def set_vol_compliance(self, vol_compl: float) -> None:
         vol_compl = math.fabs(vol_compl) * -1
         resp = self._comms.send_receive(
-            f":SENSE:VOLTAGE:PROT:LEVEL {vol_compl}".encode("utf-8")
+            f":SENSE:VOLTAGE:PROT:LEVEL {vol_compl}".encode("ascii")
         )
 
     def get_current(self) -> float:
-        amps = self._comms.send_receive(":SOURCE:CURRENT?".encode("utf-8"))
+        amps = self._comms.send_receive(":SOURCE:CURRENT?".encode("ascii"))
         # make it mAmps
         return float(amps.decode()) * 1000 if amps is not None else 0.0
 
     def get_cur_compliance(self) -> float:
         cur_compl = self._comms.send_receive(
-            ":SENSE:CURRENT:PROT:LEVEL?".encode("utf-8")
+            ":SENSE:CURRENT:PROT:LEVEL?".encode("ascii")
         )
         return float(cur_compl.decode()) * 1000 if cur_compl is not None else 0.0
 
     def set_cur_compliance(self, cur_compl: float) -> None:
         cur_compl = math.fabs(cur_compl) / 1000
         resp = self._comms.send_receive(
-            f":SENSE:CURRENT:PROT:LEVEL {cur_compl}".encode("utf-8")
+            f":SENSE:CURRENT:PROT:LEVEL {cur_compl}".encode("ascii")
         )
 
     def source_off(self, _) -> None:
-        self._comms.send_receive(":SOURCE:CLEAR:IMMEDIATE".encode("utf-8"))
+        self._comms.send_receive(":SOURCE:CLEAR:IMMEDIATE".encode("ascii"))
 
     def source_on(self, _) -> None:
-        self._comms.send_receive(":OUTPUT:STATE ON".encode("utf-8"))
+        self._comms.send_receive(":OUTPUT:STATE ON".encode("ascii"))
 
     def abort(self) -> None:
-        self._comms.send_receive(":ABORT".encode("utf-8"))
+        self._comms.send_receive(":ABORT".encode("ascii"))
         # come out of sweep mode if we are in it
         self.sweep_seconds = 0
         self.abort_flag = True
 
     def get_source_status(self) -> int:
-        result = self._comms.send_receive(":OUTPUT:STATE?".encode("utf-8"))
+        result = self._comms.send_receive(":OUTPUT:STATE?".encode("ascii"))
         return int(result.decode()) if result is not None else 0
 
     def source_voltage_ramp(
@@ -148,12 +148,12 @@ class Keithley(object):
         step_size = difference / steps
         interval = seconds / steps - LOOP_OVERHEAD
 
-        self._comms.send_receive(":SOURCE:FUNCTION:MODE VOLTAGE".encode("utf-8"))
-        self._comms.send_receive(":SOURCE:VOLTAGE:MODE FIXED".encode("utf-8"))
+        self._comms.send_receive(":SOURCE:FUNCTION:MODE VOLTAGE".encode("ascii"))
+        self._comms.send_receive(":SOURCE:VOLTAGE:MODE FIXED".encode("ascii"))
         for step in range(steps + 1):
             if self.abort_flag:
                 break
-            self._comms.send_receive(f":SOURCE:VOLTAGE {voltage}".encode("utf-8"))
+            self._comms.send_receive(f":SOURCE:VOLTAGE {voltage}".encode("ascii"))
             self.get_voltage()
             voltage += step_size
             cothread.Sleep(interval)
@@ -165,5 +165,5 @@ class Keithley(object):
 :SENSE:VOLTAGE:RANGE:AUTO 1
 :SOURCE:VOLTAGE:RANGE:AUTO 1
 """.encode(
-        "utf-8"
+        "ascii"
     )
