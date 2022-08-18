@@ -1,7 +1,6 @@
 # import logging
 import socket
 import warnings
-import select
 from typing import Optional, Tuple, Union
 
 import cothread
@@ -9,7 +8,7 @@ import cothread
 # Constants
 CR = b"\r"
 CODEC = "ascii"
-TIMEOUT = 5.0  # Seconds
+TIMEOUT = 1.0  # Seconds
 RECV_BUFFER = 4096  # Bytes
 
 
@@ -22,7 +21,7 @@ class Comms:
         self._endpoint = (ip, port)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.settimeout(TIMEOUT)
-        self._socket.setblocking(0)
+        self._socket.setblocking(1)
         self._lock = cothread.RLock()
 
     def connect(self):
@@ -81,18 +80,16 @@ class Comms:
         with self._lock:
             self._send(request)
 
-        ready = select.select([self._socket], [], [], TIMEOUT)
-        sock_opt = self._socket.getsockopt()
+            sock_opt = self._socket.getsockopt()
+            if sock_opt != 0:
+                raise RuntimeError(sock_opt)
 
-        if sock_opt != 0:
-            raise RuntimeError(sock_opt)
-
-        if request.endswith(b"?") and ready[0]:
-            try:
-                response = self._socket.recv(RECV_BUFFER)
-                return response
-            except UnicodeDecodeError as e:
-                warnings.warn(f"{e}:\n{self._format_message(response)}")
+            if request.endswith(b"?") and ready[0]:
+                try:
+                    response = self._socket.recv(RECV_BUFFER).decode()
+                    return response
+                except UnicodeDecodeError as e:
+                    warnings.warn(f"{e}:\n{self._format_message(response)}")
 
         # self._log.debug(f"Received response:\n{self._format_message(decoded_response)}")
         return None
