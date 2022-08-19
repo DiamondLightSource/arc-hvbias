@@ -7,9 +7,8 @@ import cothread
 
 # Constants
 CR = "\r"
-CODEC = "ascii"
-TIMEOUT = 2.0  # Seconds
-RECV_BUFFER = 100  # Bytes
+TIMEOUT = None  # Seconds
+RECV_BUFFER = 4096  # Bytes
 
 
 class Comms:
@@ -62,7 +61,7 @@ class Comms:
             request (str): The request string to send.
         """
         # print(f"Sending request:\n{self._format_message(request)}")
-        self._socket.send(self._format_message(request).encode("utf-8"))
+        self._socket.send(self._format_message(request).encode())
         # print(f"Sent {bytes_sent} byte(s)")
 
     def _send_receive(self, request: bytes) -> Optional[bytes]:
