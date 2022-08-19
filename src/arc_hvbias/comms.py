@@ -6,7 +6,7 @@ from typing import Optional, Tuple, Union
 import cothread
 
 # Constants
-CR = b"\r"
+CR = "\r"
 CODEC = "ascii"
 TIMEOUT = 1.0  # Seconds
 RECV_BUFFER = 100  # Bytes
@@ -21,7 +21,7 @@ class Comms:
         self._endpoint = (ip, port)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.settimeout(TIMEOUT)
-        self._socket.setblocking(1)
+        self._socket.setblocking(True)
         self._lock = cothread.RLock()
 
     def connect(self):
@@ -63,10 +63,10 @@ class Comms:
             request (str): The request string to send.
         """
         # print(f"Sending request:\n{self._format_message(request)}")
-        bytes_sent = self._socket.send(request)
+        self._socket.sendall(request)
         # print(f"Sent {bytes_sent} byte(s)")
 
-    def _send_receive(self, request: bytes) -> Optional[bytes]:
+    def _send_receive(self, request: bytes) -> Optional[str]:
         """Sends a request and attempts to decode the response. Does not determine if
         the response indicates acknowledgement from the device.
 
@@ -80,11 +80,11 @@ class Comms:
         with self._lock:
             self._send(request)
 
-            sock_opt = self._socket.getsockopt()
-            if sock_opt != 0:
+            sock_opt = self._socket.getsockopt(socket.SOL_TCP, socket.SO_RCVBUF)
+            if sock_opt != RECV_BUFFER:
                 raise RuntimeError(sock_opt)
 
-            if request.endswith(b"?") and ready[0]:
+            if request.endswith(b"?"):
                 try:
                     response = self._socket.recv(RECV_BUFFER).decode()
                     return response
@@ -94,7 +94,7 @@ class Comms:
         # self._log.debug(f"Received response:\n{self._format_message(decoded_response)}")
         return None
 
-    def send_receive(self, request: bytes) -> Optional[bytes]:
+    def send_receive(self, request: bytes) -> Optional[str]:
         """Sends a request and attempts to decode the response. Determines if the
         response indicates acknowledgement from the device.
 
