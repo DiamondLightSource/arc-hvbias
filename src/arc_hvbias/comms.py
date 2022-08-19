@@ -1,13 +1,13 @@
 # import logging
 import socket
 import warnings
-from typing import Optional, Tuple, Union
+from typing import Optional
 
 import cothread
 
 # Constants
 CR = "\r"
-TIMEOUT = None  # Seconds
+TIMEOUT = 1.0  # Seconds
 RECV_BUFFER = 4096  # Bytes
 
 
@@ -43,16 +43,16 @@ class Comms:
                 break
 
     @staticmethod
-    def _format_message(message: Union[str, bytes]) -> str:
+    def _format_message(message: bytes) -> bytes:
         """Format message for printing by appending a newline char.
 
         Args:
-            message (Union[str, bytes]): The message to format.
+            message (bytes): The message to format.
 
         Returns:
-            str: The formatted message.
+            bytes: The formatted message.
         """
-        return str(message) + "\n"
+        return message + b"\n"
 
     def _send(self, request: bytes):
         """Send a request.
@@ -61,7 +61,7 @@ class Comms:
             request (str): The request string to send.
         """
         # print(f"Sending request:\n{self._format_message(request)}")
-        self._socket.send(self._format_message(request).encode())
+        self._socket.send(self._format_message(request))
         # print(f"Sent {bytes_sent} byte(s)")
 
     def _send_receive(self, request: bytes) -> Optional[bytes]:
@@ -83,7 +83,7 @@ class Comms:
                     response = self._socket.recv(RECV_BUFFER)
                     return response
                 except UnicodeDecodeError as e:
-                    warnings.warn(f"{e}:\n{self._format_message(response)}")
+                    warnings.warn(f"{e}:\n{self._format_message(response).decode()}")
                 except socket.timeout:
                     warnings.warn("Didn't receive a response in time.")
 
