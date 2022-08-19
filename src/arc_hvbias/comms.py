@@ -8,7 +8,7 @@ import cothread
 # Constants
 CR = "\r"
 CODEC = "ascii"
-TIMEOUT = 1.0  # Seconds
+TIMEOUT = 2.0  # Seconds
 RECV_BUFFER = 100  # Bytes
 
 
@@ -85,6 +85,8 @@ class Comms:
                     return response
                 except UnicodeDecodeError as e:
                     warnings.warn(f"{e}:\n{self._format_message(response)}")
+                except socket.timeout:
+                    warnings.warn("Didn't receive a response in time.")
 
         # self._log.debug(f"Received response:\n{self._format_message(decoded_response)}")
         return None
