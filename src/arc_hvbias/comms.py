@@ -21,7 +21,6 @@ class Comms:
         self._endpoint = (ip, port)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.settimeout(TIMEOUT)
-        self._socket.setblocking(True)
         self._lock = cothread.RLock()
 
     def connect(self):
@@ -63,10 +62,10 @@ class Comms:
             request (str): The request string to send.
         """
         # print(f"Sending request:\n{self._format_message(request)}")
-        self._socket.sendall(request)
+        self._socket.send(self._format_message(request).encode("utf-8"))
         # print(f"Sent {bytes_sent} byte(s)")
 
-    def _send_receive(self, request: bytes) -> Optional[str]:
+    def _send_receive(self, request: bytes) -> Optional[bytes]:
         """Sends a request and attempts to decode the response. Does not determine if
         the response indicates acknowledgement from the device.
 
@@ -80,13 +79,9 @@ class Comms:
         with self._lock:
             self._send(request)
 
-            sock_opt = self._socket.getsockopt(socket.SOL_TCP, socket.SO_RCVBUF)
-            if sock_opt != RECV_BUFFER:
-                raise RuntimeError(sock_opt)
-
             if request.endswith(b"?"):
                 try:
-                    response = self._socket.recv(RECV_BUFFER).decode()
+                    response = self._socket.recv(RECV_BUFFER)
                     return response
                 except UnicodeDecodeError as e:
                     warnings.warn(f"{e}:\n{self._format_message(response)}")
@@ -94,9 +89,8 @@ class Comms:
         # self._log.debug(f"Received response:\n{self._format_message(decoded_response)}")
         return None
 
-    def send_receive(self, request: bytes) -> Optional[str]:
-        """Sends a request and attempts to decode the response. Determines if the
-        response indicates acknowledgement from the device.
+    def send_receive(self, request: bytes) -> Optional[bytes]:
+        """Sends a request and attempts to decode the response.
 
         Args:
             request (str): The request string to send.
@@ -109,13 +103,5 @@ class Comms:
         response = self._send_receive(request)
         if response is None:
             return None
-
-        messages = response.split(CR)[:-1]
-
-        if len(messages) > 1:
-            warnings.warn(
-                "Received multiple messages in response:\n"
-                f"{self._format_message(response)}"
-            )
 
         return response
