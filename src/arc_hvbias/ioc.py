@@ -225,10 +225,6 @@ class Ioc:
 
                 self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_UP)
 
-                self.do_cycle(
-                    off_voltage, rise_time, Status.VOLTAGE_OFF, Status.RAMP_DOWN
-                )
-
         except RuntimeError as e:
             self.k.voltage_ramp_worker(off_voltage, self.step_size.get(), rise_time)
             self.status_rbv.set(Status.VOLTAGE_OFF)
