@@ -94,7 +94,7 @@ class Ioc:
         self.rise_time = builder.aOut("RISE-TIME", initial_value=2, EGU="Sec", PREC=2)
         self.hold_time = builder.aOut("HOLD-TIME", initial_value=3, EGU="Sec", PREC=2)
         self.fall_time = builder.aOut("FALL-TIME", initial_value=2, EGU="Sec", PREC=2)
-        self.pause_time = builder.aOut("PAUSE-TIME", EGU="Sec", PREC=2)
+        self.pause_time = builder.aOut("PAUSE-TIME", initial_value=2, EGU="Sec", PREC=2)
         self.repeats = builder.longOut("REPEATS", initial_value=1)
         self.step_size = builder.aOut("STEP-SIZE", initial_value=5.0)
         self.max_time = builder.longOut("MAX-TIME", initial_value=900)
