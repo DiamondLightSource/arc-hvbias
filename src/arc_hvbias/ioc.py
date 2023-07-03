@@ -215,6 +215,10 @@ class Ioc:
         try:
             self.cycle_rbv.set(True)
 
+            if self.voltage_rbv.get() == 0:
+                self.time_since_rbv.set(0)
+                self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_UP)
+
             for repeat in range(repeats):
 
                 self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_UP)
@@ -228,6 +232,7 @@ class Ioc:
         except RuntimeError as e:
             self.k.voltage_ramp_worker(off_voltage, self.step_size.get(), rise_time)
             self.status_rbv.set(Status.VOLTAGE_OFF)
+            self.time_since_rbv.set(0)
             print("cycle failed:", e)
 
         finally:
