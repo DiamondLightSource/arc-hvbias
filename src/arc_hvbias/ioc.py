@@ -217,17 +217,16 @@ class Ioc:
 
             if self.voltage_rbv.get() == 0:
                 self.time_since_rbv.set(0)
-                self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_UP)
+                self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_OFF)
 
             for repeat in range(repeats):
-
-                self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_UP)
+                self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_OFF)
 
                 self.do_cycle(
-                    off_voltage, rise_time, Status.VOLTAGE_OFF, Status.RAMP_DOWN
+                    off_voltage, rise_time, Status.VOLTAGE_OFF, Status.RAMP_ON
                 )
 
-                self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_UP)
+                self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_OFF)
 
         except RuntimeError as e:
             self.k.voltage_ramp_worker(off_voltage, self.step_size.get(), rise_time)
@@ -246,16 +245,14 @@ class Ioc:
         voltage_status: int,
         ramp_status: int,
     ) -> None:
-
         step_size = self.step_size.get()
 
         if self.pause_flag:
             self.pause_cycle.Wait()
 
         if not self.stop_flag:
-
             # initially move to a bias-on state
-            # self.status_rbv.set(Status.RAMP_DOWN)
+            # self.status_rbv.set(Status.RAMP_ON)
             self.k.voltage_ramp_worker(voltage, step_size, time)
 
             self.status_rbv.set(voltage_status)
@@ -282,17 +279,20 @@ class Ioc:
             self.cycle_rbv.set(0)
             self.cmd_off.set(1)
             self.status_rbv.set(Status.VOLTAGE_OFF)
+            self.do_ramp_off()
 
     def do_ramp_on(self, start: bool) -> None:
-        self.status_rbv.set(Status.RAMP_DOWN)
+        self.status_rbv.set(Status.RAMP_ON)
         seconds = self.rise_time.get()
         to_volts = self.on_setpoint.get()
         step_size = self.step_size.get()
         self.k.source_voltage_ramp(to_volts, step_size, seconds)
+        self.status_rbv.set(Status.VOLTAGE_ON)
 
     def do_ramp_off(self, start: bool) -> None:
-        self.status_rbv.set(Status.RAMP_UP)
+        self.status_rbv.set(Status.RAMP_OFF)
         seconds = self.fall_time.get()
         to_volts = self.off_setpoint.get()
         step_size = self.step_size.get()
         self.k.source_voltage_ramp(to_volts, step_size, seconds)
+        self.status_rbv.set(Status.VOLTAGE_OFF)
