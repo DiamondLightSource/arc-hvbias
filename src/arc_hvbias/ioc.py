@@ -1,7 +1,6 @@
 import math
 import warnings
 from datetime import datetime
-from typing import Union
 
 import cothread
 
@@ -48,9 +47,9 @@ class Ioc:
         self.cmd_cycle = builder.boolOut(
             "CYCLE", always_update=True, on_update=self.do_start_cycle
         )
-        self.cmd_pause = builder.boolOut(
-            "PAUSE", always_update=True, on_update=self.do_pause
-        )
+        # self.cmd_pause = builder.boolOut(
+        #     "PAUSE", always_update=True, on_update=self.do_pause
+        # )
         self.cmd_voltage = builder.aOut(
             "VOLTAGE", always_update=True, on_update=self.k.set_voltage
         )
@@ -102,7 +101,7 @@ class Ioc:
         # other state variables
         self.last_time: datetime = datetime.fromtimestamp(0)
         self.last_transition = datetime.now()
-        self.pause_flag = False
+        # self.pause_flag = False
         self.stop_flag = False
         self.cycle_flag = False
 
@@ -112,7 +111,7 @@ class Ioc:
 
         self.pause_param_update = cothread.Event()
         self.pause_cycle_update = cothread.Event()
-        self.pause_cycle = cothread.Event()
+        # self.pause_cycle = cothread.Event()
 
         cothread.Spawn(self.param_update)
         cothread.Spawn(self.cycle_update)
@@ -247,8 +246,8 @@ class Ioc:
     ) -> None:
         step_size = self.step_size.get()
 
-        if self.pause_flag:
-            self.pause_cycle.Wait()
+        # if self.pause_flag:
+        #     self.pause_cycle.Wait()
 
         if not self.stop_flag:
             # initially move to a bias-on state
@@ -263,14 +262,14 @@ class Ioc:
         else:
             raise RuntimeError("Abort called.")
 
-    def do_pause(self, pause: int) -> None:
-        if pause == 0:
-            self.pause_flag = False
-            self.cycle_rbv.set(True)
-            self.pause_cycle.Signal()
-        if pause == 1:
-            self.pause_flag = True
-            self.cycle_rbv.set(False)
+    # def do_pause(self, pause: int) -> None:
+    #     if pause == 0:
+    #         self.pause_flag = False
+    #         self.cycle_rbv.set(True)
+    #         self.pause_cycle.Signal()
+    #     if pause == 1:
+    #         self.pause_flag = True
+    #         self.cycle_rbv.set(False)
 
     def do_stop(self, stop: int) -> None:
         if stop == 1:
