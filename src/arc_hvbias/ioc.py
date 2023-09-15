@@ -218,6 +218,8 @@ class Ioc:
                 self.time_since_rbv.set(0)
                 self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_OFF)
 
+                cothread.Sleep(self.max_time.get())
+
             for repeat in range(repeats):
                 self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_OFF)
 
