@@ -216,18 +216,18 @@ class Ioc:
 
             if self.voltage_rbv.get() == 0:
                 self.time_since_rbv.set(0)
-                self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_OFF)
+                self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
 
                 cothread.Sleep(self.max_time.get())
 
             for repeat in range(repeats):
-                self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_OFF)
+                self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
 
                 self.do_cycle(
-                    off_voltage, rise_time, Status.VOLTAGE_OFF, Status.RAMP_ON
+                    off_voltage, rise_time, Status.RAMP_OFF, Status.VOLTAGE_OFF
                 )
 
-                self.do_cycle(on_voltage, fall_time, Status.VOLTAGE_ON, Status.RAMP_OFF)
+                self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
 
         except RuntimeError as e:
             self.k.voltage_ramp_worker(off_voltage, self.step_size.get(), rise_time)
@@ -243,8 +243,8 @@ class Ioc:
         self,
         voltage: float,
         time: float,
-        voltage_status: int,
         ramp_status: int,
+        voltage_status: int,
     ) -> None:
         step_size = self.step_size.get()
 
@@ -252,6 +252,8 @@ class Ioc:
         #     self.pause_cycle.Wait()
 
         if not self.stop_flag:
+            self.status_rbv.set(ramp_status)
+
             # initially move to a bias-on state
             # self.status_rbv.set(Status.RAMP_ON)
             self.k.voltage_ramp_worker(voltage, step_size, time)
@@ -259,8 +261,6 @@ class Ioc:
             self.status_rbv.set(voltage_status)
 
             cothread.Sleep(self.hold_time.get())
-
-            self.status_rbv.set(ramp_status)
         else:
             raise RuntimeError("Abort called.")
 
