@@ -260,7 +260,10 @@ class Ioc:
 
             self.status_rbv.set(voltage_status)
 
-            cothread.Sleep(self.hold_time.get())
+            if ramp_status == Status.RAMP_ON:
+                cothread.Sleep(self.hold_time.get())
+            elif ramp_status == Status.RAMP_ON:
+                cothread.Sleep(self.pause_time.get())
         else:
             raise RuntimeError("Abort called.")
 
