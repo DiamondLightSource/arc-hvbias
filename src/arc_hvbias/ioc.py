@@ -278,12 +278,11 @@ class Ioc:
 
     def do_stop(self, stop: int) -> None:
         if stop == 1:
+            self.cycle_rbv.set(0)
             self.stop_flag = True
             self.k.abort()
-            self.cycle_rbv.set(0)
+            self.do_ramp_off(1)
             self.cmd_off.set(1)
-            self.status_rbv.set(Status.VOLTAGE_OFF)
-            self.do_ramp_off()
 
     def do_ramp_on(self, start: bool) -> None:
         self.status_rbv.set(Status.RAMP_ON)
