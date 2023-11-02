@@ -212,13 +212,13 @@ class Ioc:
         repeats = self.repeats.get()
 
         try:
-            self.cycle_rbv.set(True)
-
             if self.voltage_rbv.get() == 0:
                 self.time_since_rbv.set(0)
                 self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
 
                 cothread.Sleep(self.max_time.get())
+
+            self.cycle_rbv.set(True)
 
             for repeat in range(repeats):
                 self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
