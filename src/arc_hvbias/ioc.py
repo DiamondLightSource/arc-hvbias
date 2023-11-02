@@ -221,8 +221,6 @@ class Ioc:
             self.cycle_rbv.set(True)
 
             for repeat in range(repeats):
-                self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
-
                 self.do_cycle(
                     off_voltage, rise_time, Status.RAMP_OFF, Status.VOLTAGE_OFF
                 )
