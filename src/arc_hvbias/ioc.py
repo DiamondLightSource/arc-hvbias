@@ -260,7 +260,7 @@ class Ioc:
 
             self.status_rbv.set(voltage_status)
 
-            if ramp_status == Status.RAMP_ON:
+            if ramp_status == Status.RAMP_OFF:
                 cothread.Sleep(self.hold_time.get())
             elif ramp_status == Status.RAMP_ON:
                 cothread.Sleep(self.pause_time.get())
