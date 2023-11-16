@@ -105,6 +105,8 @@ class Ioc:
         self.stop_flag = False
         self.cycle_flag = False
 
+        self.configured = False
+
         # Boilerplate get the IOC started
         builder.LoadDatabase()
         softioc.iocInit()
@@ -124,6 +126,7 @@ class Ioc:
             is_connected, model = self.k.check_connected()
             if not is_connected:
                 self.connected.set(0)
+                self.configured = False
                 print("Connection lost. Attempting to reconnect...")
                 self.k.connect()
             else:
@@ -131,16 +134,20 @@ class Ioc:
                     print(f"Connected to device: {model}")
                     cothread.Sleep(0.5)
                     self.connected.set(1)
+                    self.configure()
                     self.pause_param_update.Signal()
             cothread.Sleep(0.5)
 
     # main update loop
     def param_update(self) -> None:
         while True:
-            if self.connected.get() == 1:
+            if self.connected.get() == 1 and self.configured:
                 try:
-                    self.voltage_rbv.set(self.k.get_voltage())
-                    self.current_rbv.set(self.k.get_current())
+                    # Read data elements and unpack into vars
+                    volt, curr, res, time, stat = self.k.read()
+                    self.voltage_rbv.set(float(volt))
+                    self.current_rbv.set(float(curr))
+
                     self.vol_compliance_rbv.set(self.k.get_vol_compliance())
                     self.cur_compliance_rbv.set(self.k.get_cur_compliance())
                     self.output_rbv.set(self.k.get_source_status())
@@ -202,6 +209,7 @@ class Ioc:
         or after max time
         """
         self.stop_flag = False
+        # Trigger cycle update loop to begin if the thread is paused
         self.pause_cycle_update.Signal()
 
         on_voltage = self.on_setpoint.get()
@@ -212,6 +220,7 @@ class Ioc:
         repeats = self.repeats.get()
 
         try:
+            # If already off, instantly set Time Since to 0 and also Ramp to ON, then wait MAX TIME
             if self.voltage_rbv.get() == 0:
                 self.time_since_rbv.set(0)
                 self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
@@ -220,6 +229,7 @@ class Ioc:
 
             self.cycle_rbv.set(True)
 
+            # Begin depolarisation cycle
             for repeat in range(repeats):
                 self.do_cycle(
                     off_voltage, rise_time, Status.RAMP_OFF, Status.VOLTAGE_OFF
@@ -234,6 +244,9 @@ class Ioc:
             print("cycle failed:", e)
 
         finally:
+            # Return Keithley to IDLE state
+            self.k.abort()
+
             self.cycle_rbv.set(False)
             self.cycle_flag = False
 
@@ -258,6 +271,7 @@ class Ioc:
 
             self.status_rbv.set(voltage_status)
 
+            # Select the correct wait time based on ramp status
             if ramp_status == Status.RAMP_OFF:
                 cothread.Sleep(self.hold_time.get())
             elif ramp_status == Status.RAMP_ON:
@@ -275,6 +289,7 @@ class Ioc:
     #         self.cycle_rbv.set(False)
 
     def do_stop(self, stop: int) -> None:
+        # If stop called, abort and Ramp to OFF setpoint
         if stop == 1:
             self.cycle_rbv.set(0)
             self.stop_flag = True
@@ -282,7 +297,10 @@ class Ioc:
             self.do_ramp_off(1)
             self.cmd_off.set(1)
 
-    def do_ramp_on(self, start: bool) -> None:
+    def do_ramp_on(self, start: int) -> None:
+        # Move Keithley out of IDLE state
+        self.k.initiate()
+
         self.status_rbv.set(Status.RAMP_ON)
         seconds = self.rise_time.get()
         to_volts = self.on_setpoint.get()
@@ -290,10 +308,47 @@ class Ioc:
         self.k.source_voltage_ramp(to_volts, step_size, seconds)
         self.status_rbv.set(Status.VOLTAGE_ON)
 
-    def do_ramp_off(self, start: bool) -> None:
+        # Return Keithley to IDLE state
+        self.k.abort()
+
+    def do_ramp_off(self, start: int) -> None:
+        # Move Keithley out of IDLE state
+        self.k.initiate()
+
         self.status_rbv.set(Status.RAMP_OFF)
         seconds = self.fall_time.get()
         to_volts = self.off_setpoint.get()
         step_size = self.step_size.get()
         self.k.source_voltage_ramp(to_volts, step_size, seconds)
         self.status_rbv.set(Status.VOLTAGE_OFF)
+
+        # Return Keithley to IDLE state
+        self.k.abort()
+
+    def configure(self) -> None:
+        # Set to bypass arm event detector
+        # self.k.arm_direction("SOURCE")
+        # Set to bypass trigger event detector
+        # self.k.trigger_direction("SOURCE")
+
+        # Make sure source isn't turned off after a measurement
+        self.k.source_auto_clear("OFF")
+
+        # Set the data elements we want to read back
+        self.k.set_data_elements()
+
+        # Configure string for Keithley function
+        conf_func = '"VOLT:DC","CURR:DC"'
+
+        # Send function configure string to Keithley
+        self.k.configure(conf_func)
+
+        # Query if the Keithley is in the correct configuration
+        queried = self.k.query_configure()
+
+        # Wait until Keithley is in the correct configuration
+        while queried != conf_func:
+            queried = self.k.query_configure()
+            cothread.Sleep(1)
+
+        self.configured = True

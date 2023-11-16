@@ -2,10 +2,11 @@
 Defines a connection to a Kiethley 2400 over serial and provides an interface
 to command and query the device
 """
+import codecs
 import math
 import warnings
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import cothread
 
@@ -21,7 +22,6 @@ class Keithley(object):
         ip: str = "192.168.0.1",
         port: int = 8080,
     ) -> None:
-
         self._ip = ip
         self._port = port
         self._comms: Comms = Comms(self._ip, self._port)
@@ -37,7 +37,6 @@ class Keithley(object):
             self._comms.disconnect()
 
     def connect(self) -> None:
-
         self._comms.connect()
 
         self._comms.send_receive("".encode())
@@ -60,6 +59,62 @@ class Keithley(object):
 
     def disconnect(self):
         self._comms.disconnect()
+
+    def set_data_elements(self) -> None:
+        resp = self._comms.send_receive(":FORM:ELEM, VOLT, CURR, TIME, STAT".encode())
+
+    def arm_direction(self, direction: str = "SOURCE") -> None:
+        resp = self._comms.send_receive(f":ARM:DIR {direction}".encode())
+
+    def trigger_direction(self, direction: str = "SOURCE") -> None:
+        resp = self._comms.send_receive(f":TRIGGER:DIR {direction}".encode())
+
+    def initiate(self) -> None:
+        resp = self._comms.send_receive(":INIT".encode())
+
+    def arm(self) -> None:
+        resp = self._comms.send_receive(":ARM:SOURCE IMMEDIATE".encode())
+
+    def trigger(self) -> None:
+        resp = self._comms.send_receive(":TRIGGER:SOURCE IMMEDIATE".encode())
+
+    def configure(self, conf_func: str = "VOLT:DC") -> None:
+        resp = self._comms.send_receive(f":CONF:{conf_func}".encode())
+
+    def query_configure(self) -> Optional[str]:
+        resp = self._comms.send_receive(":CONF?".encode())
+        if resp is not None:
+            resp = codecs.decode(resp).strip("\n")
+        return resp
+
+    def measure(self, measurement: str = "VOLTAGE") -> Optional[bytes]:
+        measurement = measurement.upper()
+        assert measurement in [
+            "VOLT",
+            "VOLTAGE",
+            "CURR",
+            "CURRENT",
+            "RES",
+            "RESISTANCE",
+        ]
+        resp = self._comms.send_receive(f":MEASURE:{measurement}?".encode())
+        return resp
+
+    def fetch(self) -> Optional[bytes]:
+        resp = self._comms.send_receive(":FETCH?".encode())
+        return resp
+
+    def read(self) -> List[str]:
+        resp = self._comms.send_receive(":READ?".encode())
+        if resp is not None:
+            return codecs.decode(resp).strip("\n").split(",")
+        else:
+            raise Exception(":READ? response is 'None'. Is the source on?")
+
+    def source_auto_clear(self, on_off: str = "ON") -> None:
+        on_off = on_off.upper()
+        assert on_off in ["ON", "OFF"]
+        resp = self._comms.send_receive(f":SOURCE:CLEAR:AUTO {on_off}".encode())
 
     def get_voltage(self) -> float:
         volts = self._comms.send_receive(":SOURCE:VOLTAGE?".encode())
