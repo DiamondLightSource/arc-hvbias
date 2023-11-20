@@ -6,7 +6,7 @@ import codecs
 import math
 import warnings
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import List, Literal, Optional, Tuple, Union
 
 import cothread
 
@@ -61,7 +61,8 @@ class Keithley(object):
         self._comms.disconnect()
 
     def set_data_elements(self) -> None:
-        resp = self._comms.send_receive(":FORM:ELEM, VOLT, CURR, TIME, STAT".encode())
+        resp = self._comms.send_receive(":ELEM, VOLT, CURR, TIME, STAT".encode())
+        query_elements = self._comms.send_receive(":ELEM?".encode())
 
     def arm_direction(self, direction: str = "SOURCE") -> None:
         resp = self._comms.send_receive(f":ARM:DIR {direction}".encode())
@@ -69,14 +70,22 @@ class Keithley(object):
     def trigger_direction(self, direction: str = "SOURCE") -> None:
         resp = self._comms.send_receive(f":TRIGGER:DIR {direction}".encode())
 
+    def arm_source(self, source: str = "IMMEDIATE") -> None:
+        resp = self._comms.send_receive(f":ARM:SOURCE {source}".encode())
+
+    def trigger_source(self, source: str = "IMMEDIATE") -> None:
+        resp = self._comms.send_receive(f":TRIGGER:SOURCE {source}".encode())
+
+    def arm_count(self, count: Union[int, Literal["INF"]] = 1) -> None:
+        assert count >= 1 and count <= 2500 if isinstance(count, int) else "INF"
+        resp = self._comms.send_receive(f":ARM:COUNT {count}".encode())
+
+    def trigger_count(self, count: int = 1) -> None:
+        assert count >= 1 and count <= 2500
+        resp = self._comms.send_receive(f":TRIGGER:COUNT {count}".encode())
+
     def initiate(self) -> None:
         resp = self._comms.send_receive(":INIT".encode())
-
-    def arm(self) -> None:
-        resp = self._comms.send_receive(":ARM:SOURCE IMMEDIATE".encode())
-
-    def trigger(self) -> None:
-        resp = self._comms.send_receive(":TRIGGER:SOURCE IMMEDIATE".encode())
 
     def configure(self, conf_func: str = "VOLT:DC") -> None:
         resp = self._comms.send_receive(f":CONF:{conf_func}".encode())
@@ -100,9 +109,12 @@ class Keithley(object):
         resp = self._comms.send_receive(f":MEASURE:{measurement}?".encode())
         return resp
 
-    def fetch(self) -> Optional[bytes]:
+    def fetch(self) -> List[str]:
         resp = self._comms.send_receive(":FETCH?".encode())
-        return resp
+        if resp is not None:
+            return codecs.decode(resp).strip("\n").split(",")
+        else:
+            raise Exception(":FETCH? response is 'None'. Is the source on?")
 
     def read(self) -> List[str]:
         resp = self._comms.send_receive(":READ?".encode())

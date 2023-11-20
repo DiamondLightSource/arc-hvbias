@@ -340,15 +340,20 @@ class Ioc:
 
     def configure(self) -> None:
         # Set to bypass arm event detector
-        # self.k.arm_direction("SOURCE")
+        self.k.arm_direction("SOURCE")
+        self.k.arm_source("IMMEDIATE")
+
         # Set to bypass trigger event detector
-        # self.k.trigger_direction("SOURCE")
+        self.k.trigger_direction("SOURCE")
+        self.k.trigger_source("IMMEDIATE")
 
         # Make sure source isn't turned off after a measurement
         self.k.source_auto_clear("OFF")
 
         # Set the data elements we want to read back
         self.k.set_data_elements()
+
+        self.k.trigger_count(1)
 
         # Configure string for Keithley function
         conf_func = '"VOLT:DC","CURR:DC"'
