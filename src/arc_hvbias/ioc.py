@@ -14,6 +14,11 @@ from .status import Status
 ioc = None
 
 
+# for debugging
+def tprint(string: str) -> None:
+    print(f"{datetime.now()} - {string}")
+
+
 class Ioc:
     """
     A Soft IOC to provide the PVs to control and monitor the Keithley class
@@ -102,10 +107,10 @@ class Ioc:
         self.last_time: datetime = datetime.fromtimestamp(0)
         self.last_transition = datetime.now()
         # self.pause_flag = False
-        self.stop_flag = False
-        self.cycle_flag = False
+        self.stop_flag: bool = False
+        self.cycle_flag: bool = False
 
-        self.configured = False
+        self.configured: bool = False
 
         # Boilerplate get the IOC started
         builder.LoadDatabase()
@@ -127,11 +132,11 @@ class Ioc:
             if not is_connected:
                 self.connected.set(0)
                 self.configured = False
-                print("Connection lost. Attempting to reconnect...")
+                tprint("Connection lost. Attempting to reconnect...")
                 self.k.connect()
             else:
                 if not self.connected.get():
-                    print(f"Connected to device: {model}")
+                    tprint(f"Connected to device: {model}")
                     cothread.Sleep(0.5)
                     self.connected.set(1)
                     self.configure()
@@ -220,17 +225,22 @@ class Ioc:
         repeats = self.repeats.get()
 
         try:
+            tprint("Start Cycle")
             # If already off, instantly set Time Since to 0 and also Ramp to ON, then wait MAX TIME
             if math.isclose(self.voltage_rbv.get(), 0.0, abs_tol=1e-3):
+                tprint("Set bias ON and wait.")
                 self.time_since_rbv.set(0)
                 self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
 
+                tprint(f"Waiting MAX TIME -> {self.max_time.get()}s")
                 cothread.Sleep(self.max_time.get())
 
+            tprint("Starting depolarisation cycle.")
             self.cycle_rbv.set(True)
 
             # Begin depolarisation cycle
             for repeat in range(repeats):
+                tprint(f"Starting Cycle No. {repeat}")
                 self.do_cycle(
                     off_voltage, rise_time, Status.RAMP_OFF, Status.VOLTAGE_OFF
                 )
@@ -241,9 +251,10 @@ class Ioc:
             self.k.voltage_ramp_worker(off_voltage, self.step_size.get(), rise_time)
             self.status_rbv.set(Status.VOLTAGE_OFF)
             self.time_since_rbv.set(0)
-            print("cycle failed:", e)
+            tprint(f"/!\\ Cycle failed: {e}")
 
         finally:
+            tprint("Finished depolarisation cycle.")
             # Return Keithley to IDLE state
             self.k.abort()
 
@@ -298,6 +309,7 @@ class Ioc:
             self.cmd_off.set(1)
 
     def do_ramp_on(self, start: int) -> None:
+        tprint("Do RAMP ON")
         # Move Keithley out of IDLE state
         self.k.initiate()
 
@@ -312,6 +324,7 @@ class Ioc:
         self.k.abort()
 
     def do_ramp_off(self, start: int) -> None:
+        tprint("Do RAMP OFF")
         # Move Keithley out of IDLE state
         self.k.initiate()
 
@@ -352,3 +365,4 @@ class Ioc:
             cothread.Sleep(1)
 
         self.configured = True
+        tprint("Configured!")
