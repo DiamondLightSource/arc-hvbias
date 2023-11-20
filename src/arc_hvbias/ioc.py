@@ -221,7 +221,7 @@ class Ioc:
 
         try:
             # If already off, instantly set Time Since to 0 and also Ramp to ON, then wait MAX TIME
-            if self.voltage_rbv.get() == 0:
+            if math.isclose(self.voltage_rbv.get(), 0.0, abs_tol=1e-3):
                 self.time_since_rbv.set(0)
                 self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
 
