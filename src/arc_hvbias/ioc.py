@@ -148,13 +148,6 @@ class Ioc:
         while True:
             if self.connected.get() == 1 and self.configured:
                 try:
-                    # Read data elements and unpack into vars
-                    volt, curr, res, time, stat = self.k.read()
-                    self.voltage_rbv.set(float(volt))
-                    self.current_rbv.set(float(curr))
-
-                    self.vol_compliance_rbv.set(self.k.get_vol_compliance())
-                    self.cur_compliance_rbv.set(self.k.get_cur_compliance())
                     self.output_rbv.set(self.k.get_source_status())
 
                     # calculate housekeeping readbacks
@@ -164,12 +157,24 @@ class Ioc:
                     )
                     self.healthy_rbv.set(healthy)
 
+                    self.vol_compliance_rbv.set(self.k.get_vol_compliance())
+                    self.cur_compliance_rbv.set(self.k.get_cur_compliance())
+
+                    # Read data elements and unpack into vars, if Source is ON
+                    if self.output_rbv.get() == 1:
+                        volt, curr, res, time, stat = self.k.read()
+                        self.voltage_rbv.set(float(volt))
+                        self.current_rbv.set(float(curr))
+
                     # update loop at 2 Hz
                     cothread.Sleep(0.5)
                 except ValueError as e:
                     # catch conversion errors when device returns and error string
                     warnings.warn(f"{e}, {self.k.last_recv}")
                     cothread.Yield()
+                except Exception as e:
+                    print(e)
+                    cothread.Sleep(0.001)
             else:
                 # Pause thread while not connected to device
                 cothread.Sleep(0.001)
