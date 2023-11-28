@@ -153,7 +153,12 @@ class Ioc:
                     # calculate housekeeping readbacks
                     healthy = (
                         self.output_rbv.get() == 1
-                        and self.voltage_rbv.get() == -math.fabs(self.on_setpoint.get())
+                        and math.isclose(
+                            self.voltage_rbv.get(),
+                            -math.fabs(self.on_setpoint.get()),
+                            abs_tol=1e-3,
+                        )
+                        and not self.cycle_rbv.get()
                     )
                     self.healthy_rbv.set(healthy)
 
@@ -185,8 +190,10 @@ class Ioc:
             if self.connected.get() == 1 and not self.stop_flag:
                 try:
                     if self.cycle_flag == 1:
-                        if self.voltage_rbv.get() == -math.fabs(
-                            self.off_setpoint.get()
+                        if math.isclose(
+                            self.voltage_rbv.get(),
+                            -math.fabs(self.off_setpoint.get()),
+                            abs_tol=1e-3,
                         ):
                             self.last_time = datetime.now()
                     if self.last_time != datetime.fromtimestamp(0):
@@ -311,12 +318,10 @@ class Ioc:
             self.stop_flag = True
             self.k.abort()
             self.do_ramp_off(1)
-            self.cmd_off.set(1)
 
     def do_ramp_on(self, start: int) -> None:
         tprint("Do RAMP ON")
-        # Move Keithley out of IDLE state
-        self.k.initiate()
+        # self.k.initiate()
 
         self.status_rbv.set(Status.RAMP_ON)
         seconds = self.rise_time.get()
@@ -325,13 +330,10 @@ class Ioc:
         self.k.source_voltage_ramp(to_volts, step_size, seconds)
         self.status_rbv.set(Status.VOLTAGE_ON)
 
-        # Return Keithley to IDLE state
-        self.k.abort()
 
     def do_ramp_off(self, start: int) -> None:
         tprint("Do RAMP OFF")
-        # Move Keithley out of IDLE state
-        self.k.initiate()
+        # self.k.initiate()
 
         self.status_rbv.set(Status.RAMP_OFF)
         seconds = self.fall_time.get()
@@ -341,7 +343,6 @@ class Ioc:
         self.status_rbv.set(Status.VOLTAGE_OFF)
 
         # Return Keithley to IDLE state
-        self.k.abort()
 
     def configure(self) -> None:
         # Set to bypass arm event detector
