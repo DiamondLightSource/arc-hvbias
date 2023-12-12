@@ -6,10 +6,9 @@ import codecs
 import math
 import warnings
 from datetime import datetime
-from typing import List, Optional, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union
 
 import cothread
-from typing_extensions import Literal
 
 from .comms import Comms
 
