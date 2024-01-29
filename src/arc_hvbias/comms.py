@@ -13,7 +13,6 @@ RECV_BUFFER = 4096  # Bytes
 
 class Comms:
     def __init__(self, ip: str, port: int):
-
         # self._log = logging.getLogger(self.__class__.__name__)
         # logging.basicConfig(level=logging.DEBUG)
 
@@ -23,7 +22,6 @@ class Comms:
         self._lock = cothread.RLock()
 
     def connect(self):
-
         print(f"Connecting to {self._endpoint[0]}:{self._endpoint[1]}")
         self._socket.connect(self._endpoint)
         # Clear initial connection messages

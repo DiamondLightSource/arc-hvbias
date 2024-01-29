@@ -171,6 +171,7 @@ class Ioc:
 
                     # Read data elements and unpack into vars, if Source is ON
                     if self.output_rbv.get() == 1:
+                        tprint("- SOURCE ON: Starting reading of values")
                         volt, curr, res, time, stat = self.k.read()
                         self.voltage_rbv.set(float(volt))
                         self.current_rbv.set(float(curr))
@@ -349,7 +350,6 @@ class Ioc:
 
     def do_ramp_on(self, start: int) -> None:
         tprint("Do RAMP ON")
-        # self.k.initiate()
 
         self.status_rbv.set(Status.RAMP_ON)
         seconds = self.rise_time.get()
@@ -358,10 +358,8 @@ class Ioc:
         self.k.source_voltage_ramp(to_volts, step_size, seconds)
         self.status_rbv.set(Status.VOLTAGE_ON)
 
-
     def do_ramp_off(self, start: int) -> None:
         tprint("Do RAMP OFF")
-        # self.k.initiate()
 
         self.status_rbv.set(Status.RAMP_OFF)
         seconds = self.fall_time.get()
@@ -369,8 +367,6 @@ class Ioc:
         step_size = self.step_size.get()
         self.k.source_voltage_ramp(to_volts, step_size, seconds)
         self.status_rbv.set(Status.VOLTAGE_OFF)
-
-        # Return Keithley to IDLE state
 
     def configure(self) -> None:
         # Set to bypass arm event detector
