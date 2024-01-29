@@ -13,6 +13,8 @@ from .status import Status
 # a global to hold the Ioc instance for interactive access
 ioc = None
 
+volt_tol = 5e-1
+
 
 # for debugging
 def tprint(string: str) -> None:
@@ -156,7 +158,7 @@ class Ioc:
                         and math.isclose(
                             self.voltage_rbv.get(),
                             -math.fabs(self.on_setpoint.get()),
-                            abs_tol=1e-3,
+                            abs_tol=volt_tol,
                         )
                         and not self.cycle_rbv.get()
                     )
@@ -193,7 +195,7 @@ class Ioc:
                         if math.isclose(
                             self.voltage_rbv.get(),
                             -math.fabs(self.off_setpoint.get()),
-                            abs_tol=1e-3,
+                            abs_tol=volt_tol,
                         ):
                             self.last_time = datetime.now()
                     if self.last_time != datetime.fromtimestamp(0):
@@ -239,7 +241,7 @@ class Ioc:
         try:
             tprint("Start Cycle")
             # If already off, instantly set Time Since to 0 and also Ramp to ON, then wait MAX TIME
-            if math.isclose(self.voltage_rbv.get(), 0.0, abs_tol=1e-3):
+            if math.isclose(self.voltage_rbv.get(), 0.0, abs_tol=volt_tol):
                 tprint("Set bias ON and wait.")
                 self.time_since_rbv.set(0)
                 self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
