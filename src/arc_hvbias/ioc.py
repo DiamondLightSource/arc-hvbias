@@ -106,11 +106,13 @@ class Ioc:
         self.max_time = builder.longOut("MAX-TIME", initial_value=900)
 
         # other state variables
-        self.last_time: datetime = datetime.fromtimestamp(0)
+        self.cycle_start_time: datetime = datetime.fromtimestamp(0)
+        self.cycle_stop_time: datetime = datetime.fromtimestamp(0)
         self.last_transition = datetime.now()
         # self.pause_flag = False
         self.stop_flag: bool = False
         self.cycle_flag: bool = False
+        self.cycle_finished: bool = False
 
         self.configured: bool = False
 
@@ -118,12 +120,12 @@ class Ioc:
         builder.LoadDatabase()
         softioc.iocInit()
 
-        self.pause_param_update = cothread.Event()
-        self.pause_cycle_update = cothread.Event()
+        self.pause_param_status_update = cothread.Event()
+        self.pause_time_update = cothread.Event()
         # self.pause_cycle = cothread.Event()
 
-        cothread.Spawn(self.param_update)
-        cothread.Spawn(self.cycle_update)
+        cothread.Spawn(self.param_status_update)
+        cothread.Spawn(self.time_status_update)
         cothread.Spawn(self.connection_check)
         # Finally leave the IOC running with an interactive shell.
         softioc.interactive_ioc(globals())
@@ -142,11 +144,11 @@ class Ioc:
                     cothread.Sleep(0.5)
                     self.connected.set(1)
                     self.configure()
-                    self.pause_param_update.Signal()
+                    self.pause_param_status_update.Signal()
             cothread.Sleep(0.5)
 
     # main update loop
-    def param_update(self) -> None:
+    def param_status_update(self) -> None:
         while True:
             if self.connected.get() == 1 and self.configured:
                 try:
@@ -185,26 +187,29 @@ class Ioc:
             else:
                 # Pause thread while not connected to device
                 cothread.Sleep(0.001)
-                self.pause_param_update.Wait()
+                self.pause_param_status_update.Wait()
 
-    def cycle_update(self) -> None:
+    def time_status_update(self) -> None:
         while True:
             if self.connected.get() == 1 and not self.stop_flag:
                 try:
                     if self.cycle_flag == 1:
-                        if math.isclose(
+                        if not math.isclose(
                             self.voltage_rbv.get(),
-                            -math.fabs(self.off_setpoint.get()),
+                            -math.fabs(self.on_setpoint.get()),
                             abs_tol=volt_tol,
                         ):
-                            self.last_time = datetime.now()
-                    if self.last_time != datetime.fromtimestamp(0):
-                        since = (datetime.now() - self.last_time).total_seconds()
-                        self.time_since_rbv.set(int(since))
+                            self.cycle_start_time = datetime.now()
+                    if self.cycle_start_time != datetime.fromtimestamp(0):
+                        self.time_since = datetime.now() - self.cycle_start_time
+                        self.time_since_rbv.set(int(self.time_since.total_seconds()))
 
-                        # if max time exceeded since last depolarise then force a cycle
-                        if since > self.max_time.get():
-                            self.do_start_cycle(do=1)
+                        # if max time exceeded since last cycle then force a cycle
+                        if self.cycle_finished and not self.cycle_failed:
+                            if (
+                                datetime.now() - self.cycle_stop_time
+                            ).total_seconds() > self.max_time.get():
+                                self.do_start_cycle(do=1)
 
                     # update loop at 2 Hz
                     cothread.Sleep(0.5)
@@ -215,12 +220,30 @@ class Ioc:
             else:
                 # Pause thread while not connected to device
                 cothread.Sleep(0.001)
-                self.pause_cycle_update.AbortWait()
+                self.pause_time_update_thread()
+
+    def pause_time_update_thread(self) -> None:
+        # Pause thread
+        self.pause_time_update.AbortWait()
 
     def do_start_cycle(self, do: int) -> None:
         if do == 1 and not self.cycle_rbv.get():
             self.cycle_flag = True
             cothread.Spawn(self.cycle_control)
+
+    def depolarise(self, on_voltage, fall_time) -> None:
+        # Pause cycle thread while initial depolarising occurring
+        self.pause_time_update_thread()
+
+        tprint("Set bias ON and wait.")
+        self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
+
+        tprint(f"Waiting MAX TIME -> {self.max_time.get()}s")
+        cothread.Sleep(self.max_time.get())
+
+        # Trigger cycle update loop to begin again
+        self.cycle_stop_time = datetime.now()
+        self.pause_time_update.Signal()
 
     def cycle_control(self) -> None:
         """
@@ -228,8 +251,10 @@ class Ioc:
         or after max time
         """
         self.stop_flag = False
+        self.cycle_failed = False
+        self.cycle_finished = False
         # Trigger cycle update loop to begin if the thread is paused
-        self.pause_cycle_update.Signal()
+        self.pause_time_update.Signal()
 
         on_voltage = self.on_setpoint.get()
         off_voltage = self.off_setpoint.get()
@@ -242,12 +267,7 @@ class Ioc:
             tprint("Start Cycle")
             # If already off, instantly set Time Since to 0 and also Ramp to ON, then wait MAX TIME
             if math.isclose(self.voltage_rbv.get(), 0.0, abs_tol=volt_tol):
-                tprint("Set bias ON and wait.")
-                self.time_since_rbv.set(0)
-                self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
-
-                tprint(f"Waiting MAX TIME -> {self.max_time.get()}s")
-                cothread.Sleep(self.max_time.get())
+                self.depolarise(on_voltage, fall_time)
 
             tprint("Starting depolarisation cycle.")
             self.cycle_rbv.set(True)
@@ -262,15 +282,19 @@ class Ioc:
                 self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
 
         except RuntimeError as e:
+            self.k.abort_flag = True
             self.k.voltage_ramp_worker(off_voltage, self.step_size.get(), rise_time)
             self.status_rbv.set(Status.VOLTAGE_OFF)
-            self.time_since_rbv.set(0)
+            self.cycle_failed = True
             tprint(f"/!\\ Cycle failed: {e}")
 
         finally:
             tprint("Finished depolarisation cycle.")
             # Return Keithley to IDLE state
             self.k.abort()
+
+            self.cycle_finished = True
+            self.cycle_stop_time = datetime.now()
 
             self.cycle_rbv.set(False)
             self.cycle_flag = False
@@ -301,6 +325,7 @@ class Ioc:
                 cothread.Sleep(self.hold_time.get())
             elif ramp_status == Status.RAMP_ON:
                 cothread.Sleep(self.pause_time.get())
+
         else:
             raise RuntimeError("Abort called.")
 
@@ -320,6 +345,7 @@ class Ioc:
             self.stop_flag = True
             self.k.abort()
             self.do_ramp_off(1)
+            self.time_since_rbv.set(0)
 
     def do_ramp_on(self, start: int) -> None:
         tprint("Do RAMP ON")
