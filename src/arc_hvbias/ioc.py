@@ -1,9 +1,19 @@
+import asyncio
 import math
-from typing import Optional
 import warnings
 from datetime import datetime
-
-import cothread
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Coroutine,
+    Optional,
+    ParamSpec,
+    Tuple,
+    TypeVar,
+    Union,
+    cast,
+)
 
 # Import the basic framework components.
 from softioc import builder, softioc
@@ -20,6 +30,62 @@ volt_tol = 5e-1
 # for debugging
 def tprint(string: str) -> None:
     print(f"{datetime.now()} - {string}")
+
+
+# AsyncFuncType = Coroutine[Any, Any, Awaitable[Any]]
+AsyncFuncType = Coroutine[Any, Any, None]
+
+
+def _if_connected(func: AsyncFuncType) -> AsyncFuncType:
+    """
+    Check connection decorator before function call.
+
+    Decorator function to check if the wrapper is connected to the motion controller
+    device before calling the attached function.
+
+    Args:
+        func (Awaitable): Function to call if connected to device
+
+    Returns:
+        Awaitable: The function to wrap func in.
+
+    """
+
+    def check_connection(*args, **kwargs) -> Union[AsyncFuncType, bool]:
+        self = args[0]
+        assert isinstance(self, Ioc)
+        if not self.connected.get() and self.configured:
+            print("Not connected to device. Try again once connection resumed.")
+            return True
+        return func  # (*args, *kwargs)
+
+    return cast(AsyncFuncType, check_connection)
+
+
+async def _catch_exceptions(func: AsyncFuncType) -> None:
+    try:
+        await func
+        # update loop at 2 Hz
+        await asyncio.sleep(0.5)
+    # except ValueError as e:
+    #     # catch conversion errors when device returns and error string
+    #     warnings.warn(f"{e}, {self.k.last_recv}")
+    #     # cothread.Yield()
+    except Exception as e:
+        warnings.warn(f"{e}")
+        await asyncio.sleep(0.001)
+
+
+async def _loop_forever(func: Callable) -> None:
+    """Wraps function in a while-true loop.
+
+    Args:
+        func (AsyncFuncType): function to wrap in while-true loop
+    """
+    while True:
+        func()
+        # # update loop at 2 Hz
+        # await asyncio.sleep(0.5)
 
 
 class Ioc:
@@ -121,132 +187,180 @@ class Ioc:
         builder.LoadDatabase()
         softioc.iocInit()
 
-        self.pause_param_status_update = cothread.Event()
-        self.pause_time_update = cothread.Event()
+        self.run_param_status_update = asyncio.Event()
+        self.run_update_time_params = asyncio.Event()
         # self.pause_cycle = cothread.Event()
 
-        cothread.Spawn(self.param_status_update)
-        cothread.Spawn(self.time_status_update)
-        cothread.Spawn(self.connection_check)
-        # Finally leave the IOC running with an interactive shell.
-        softioc.interactive_ioc(globals())
+    async def run_forever(self) -> None:
+        """Run the ZeroMQ adapter continuously."""
+        self._send_message_queue: asyncio.Queue = asyncio.Queue()
+        self._recv_message_queue: asyncio.Queue = asyncio.Queue()
 
-    def connection_check(self) -> None:
-        while True:
-            is_connected, model = self.k.check_connected()
-            if not is_connected:
-                self.connected.set(0)
-                self.configured = False
-                tprint("Connection lost. Attempting to reconnect...")
-                self.k.connect()
-            else:
-                if not self.connected.get():
-                    tprint(f"Connected to device: {model}")
-                    cothread.Sleep(0.5)
-                    self.connected.set(1)
-                    self.configure()
-                    self.pause_param_status_update.Signal()
-            cothread.Sleep(0.5)
+        # try:
+        #     if getattr(self, "_socket", None) is None:
+        #         await self.start_stream()
+        # except Exception as e:
+        #     print("Exception when starting stream:", e)
 
-    # main update loop
-    def param_status_update(self) -> None:
-        while True:
-            if self.connected.get() == 1 and self.configured:
-                try:
-                    self.output_rbv.set(self.k.get_source_status())
+        self.running = True
 
-                    # calculate housekeeping readbacks
-                    healthy = (
-                        self.output_rbv.get() == 1
-                        and math.isclose(
-                            self.voltage_rbv.get(),
-                            -math.fabs(self.on_setpoint.get()),
-                            abs_tol=volt_tol,
-                        )
-                        and not self.cycle_rbv.get()
-                    )
-                    self.healthy_rbv.set(healthy)
+        await asyncio.gather(
+            *[
+                self.connection_check,
+                self.calculate_healthy,
+                self.set_param_rbvs,
+                self.update_time_params,
+            ]
+        )
 
-                    self.vol_compliance_rbv.set(self.k.get_vol_compliance())
-                    self.cur_compliance_rbv.set(self.k.get_cur_compliance())
+        # # Finally leave the IOC running with an interactive shell.
+        # softioc.interactive_ioc(globals())
 
-                    # Read data elements and unpack into vars, if Source is ON
-                    if self.output_rbv.get() == 1:
-                        tprint("- SOURCE ON: Starting reading of values")
-                        volt, curr, res, time, stat = self.k.read()
-                        self.voltage_rbv.set(float(volt))
-                        self.current_rbv.set(float(curr))
+    # -----------------------------------------------------------------------
+    #                           Loop Methods
+    # -----------------------------------------------------------------------
 
-                    # update loop at 2 Hz
-                    cothread.Sleep(0.5)
-                except ValueError as e:
-                    # catch conversion errors when device returns and error string
-                    warnings.warn(f"{e}, {self.k.last_recv}")
-                    cothread.Yield()
-                except Exception as e:
-                    print(e)
-                    cothread.Sleep(0.001)
-            else:
-                # Pause thread while not connected to device
-                cothread.Sleep(0.001)
-                self.pause_param_status_update.Wait()
+    @_loop_forever
+    async def connection_check(self) -> None:
+        """Loop to constantly check if connected to the device."""
+        is_connected, model = self.k.check_connected()
+        if not is_connected:
+            self.connected.set(0)
+            self.configured = False
+            tprint("Connection lost. Attempting to reconnect...")
+            self.k.connect()
+        else:
+            if not self.connected.get():
+                tprint(f"Connected to device: {model}")
+                await asyncio.sleep(0.5)
+                self.connected.set(1)
+                await self.configure()
+        await asyncio.sleep(0.5)
 
-    def time_status_update(self) -> None:
-        while True:
-            if self.connected.get() == 1 and not self.stop_flag:
-                try:
-                    if self.cycle_flag == 1:
-                        if not math.isclose(
-                            self.voltage_rbv.get(),
-                            -math.fabs(self.on_setpoint.get()),
-                            abs_tol=volt_tol,
-                        ):
-                            self.cycle_start_time = datetime.now()
-                    if self.cycle_start_time != datetime.fromtimestamp(0):
-                        self.time_since = datetime.now() - self.cycle_start_time
-                        self.time_since_rbv.set(int(self.time_since.total_seconds()))
+    @_if_connected
+    @_loop_forever
+    async def calculate_healthy(self) -> None:
+        """Determines if the Keithley is in a "Healthy" state.
 
-                        # if max time exceeded since last cycle then force a cycle
-                        if self.cycle_finished and not self.cycle_failed and self.cycle_stop_time is not None:
-                            if (
-                                datetime.now() - self.cycle_stop_time
-                            ).total_seconds() > self.max_time.get():
-                                self.do_start_cycle(do=1)
+        This is when all of:
+        - Source output is ON
+        - Output voltage is at on_setpoint with [volt_tol] tolerance
+        - It is NOT currently in a depolarisation cycle
+        """
+        # calculate housekeeping readbacks
+        healthy = (
+            self.output_rbv.get() == 1
+            and math.isclose(
+                self.voltage_rbv.get(),
+                -math.fabs(self.on_setpoint.get()),
+                abs_tol=volt_tol,
+            )
+            and not self.cycle_rbv.get()
+        )
+        self.healthy_rbv.set(healthy)
 
-                    # update loop at 2 Hz
-                    cothread.Sleep(0.5)
-                except Exception as e:
-                    # catch errors
-                    warnings.warn(f"{e}, {self.k.last_recv}")
-                    cothread.Yield()
-            else:
-                # Pause thread while not connected to device
-                cothread.Sleep(0.001)
-                self.pause_time_update_thread()
+        await asyncio.sleep(0.01)
 
-    def pause_time_update_thread(self) -> None:
-        # Pause thread
-        self.pause_time_update.AbortWait()
+    @_if_connected
+    @_catch_exceptions
+    @_loop_forever
+    async def set_param_rbvs(self) -> None:
+        self.output_rbv.set(self.k.get_source_status())
 
-    def do_start_cycle(self, do: int) -> None:
-        if do == 1 and not self.cycle_rbv.get():
-            self.cycle_flag = True
-            cothread.Spawn(self.cycle_control)
+        self.vol_compliance_rbv.set(self.k.get_vol_compliance())
+        self.cur_compliance_rbv.set(self.k.get_cur_compliance())
 
-    def depolarise(self, on_voltage, fall_time) -> None:
-        # Pause cycle thread while initial depolarising occurring
-        self.pause_time_update_thread()
+        # Read data elements and unpack into vars, if Source is ON
+        if self.output_rbv.get() == 1:
+            volt, curr, res, time, stat = self.k.read()
+            self.voltage_rbv.set(float(volt))
+            self.current_rbv.set(float(curr))
+
+        await asyncio.sleep(0.01)
+
+    @_if_connected
+    @_catch_exceptions
+    @_loop_forever
+    async def update_time_params(self) -> None:
+        # TODO: This needs to be changed as won't work
+        if self.stop_flag:
+            return
+
+        # Pause thread if flag is False
+        if not self.run_update_time_params.is_set():
+            # Wait until flag become True
+            await self.run_update_time_params.wait()
+
+        # If in a cycle, and voltage is at on_setpoint
+        if self.cycle_flag == 1:
+            if not math.isclose(
+                self.voltage_rbv.get(),
+                -math.fabs(self.on_setpoint.get()),
+                abs_tol=volt_tol,
+            ):
+                # Set this is cycle_start_time
+                self.cycle_start_time = datetime.now()
+
+        if self.cycle_start_time != datetime.fromtimestamp(0):
+            self.time_since = datetime.now() - self.cycle_start_time
+            self.time_since_rbv.set(int(self.time_since.total_seconds()))
+
+            # if max time exceeded since last cycle then force a cycle
+            if (
+                self.cycle_finished
+                and not self.cycle_failed
+                and self.cycle_stop_time is not None
+            ):
+                if (
+                    datetime.now() - self.cycle_stop_time
+                ).total_seconds() > self.max_time.get():
+                    await self.do_start_cycle(do=1)
+
+    # -----------------------------------------------------------------------
+    #                               Methods
+    # -----------------------------------------------------------------------
+
+    async def depolarise(self) -> None:
+        # Pause time param update thread while initial depolarising occurring
+        self.run_update_time_params.clear()
 
         tprint("Set bias ON and wait.")
-        self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
+        await self._do_cycle(
+            self.on_setpoint.get(),
+            self.fall_time.get(),
+            Status.RAMP_ON,
+            Status.VOLTAGE_ON,
+        )
 
         tprint(f"Waiting MAX TIME -> {self.max_time.get()}s")
-        cothread.Sleep(self.max_time.get())
+        await asyncio.sleep(self.max_time.get())
 
         # Trigger cycle update loop to begin again
-        self.pause_time_update.Signal()
+        self.cycle_stop_time = datetime.now()
+        self.run_update_time_params.set()
 
-    def cycle_control(self) -> None:
+    async def do_start_cycle(self, do: int) -> None:
+        if do == 1 and not self.cycle_rbv.get():
+            self.cycle_flag = True
+            await self.cycle_control()
+
+    async def _cycle(self, repeat: int) -> None:
+        tprint(f"Starting Cycle No. {repeat}")
+        await self._do_cycle(
+            self.off_setpoint.get(),
+            self.rise_time.get(),
+            Status.RAMP_OFF,
+            Status.VOLTAGE_OFF,
+        )
+
+        await self._do_cycle(
+            self.on_setpoint.get(),
+            self.fall_time.get(),
+            Status.RAMP_ON,
+            Status.VOLTAGE_ON,
+        )
+
+    async def cycle_control(self) -> None:
         """
         Continuously perform a depolarisation cycle when the detector is idle
         or after max time
@@ -255,36 +369,26 @@ class Ioc:
         self.cycle_failed = False
         self.cycle_finished = False
         # Trigger cycle update loop to begin if the thread is paused
-        self.pause_time_update.Signal()
-
-        on_voltage = self.on_setpoint.get()
-        off_voltage = self.off_setpoint.get()
-        rise_time = self.rise_time.get()
-        fall_time = self.fall_time.get()
-
-        repeats = self.repeats.get()
+        self.run_update_time_params.set()
 
         try:
             tprint("Start Cycle")
             # If already off, instantly set Time Since to 0 and also Ramp to ON, then wait MAX TIME
             if math.isclose(self.voltage_rbv.get(), 0.0, abs_tol=volt_tol):
-                self.depolarise(on_voltage, fall_time)
+                await self.depolarise()
 
             tprint("Starting depolarisation cycle.")
             self.cycle_rbv.set(True)
 
             # Begin depolarisation cycle
-            for repeat in range(repeats):
-                tprint(f"Starting Cycle No. {repeat}")
-                self.do_cycle(
-                    off_voltage, rise_time, Status.RAMP_OFF, Status.VOLTAGE_OFF
-                )
-
-                self.do_cycle(on_voltage, fall_time, Status.RAMP_ON, Status.VOLTAGE_ON)
+            for repeat in range(self.repeats.get()):
+                await self._cycle(repeat)
 
         except RuntimeError as e:
             self.k.abort_flag = True
-            self.k.voltage_ramp_worker(off_voltage, self.step_size.get(), rise_time)
+            self.k.voltage_ramp_worker(
+                self.off_setpoint.get(), self.step_size.get(), self.rise_time.get()
+            )
             self.status_rbv.set(Status.VOLTAGE_OFF)
             self.cycle_failed = True
             tprint(f"/!\\ Cycle failed: {e}")
@@ -300,7 +404,7 @@ class Ioc:
             self.cycle_rbv.set(False)
             self.cycle_flag = False
 
-    def do_cycle(
+    async def _do_cycle(
         self,
         voltage: float,
         time: float,
@@ -309,35 +413,22 @@ class Ioc:
     ) -> None:
         step_size = self.step_size.get()
 
-        # if self.pause_flag:
-        #     self.pause_cycle.Wait()
-
         if not self.stop_flag:
             self.status_rbv.set(ramp_status)
 
             # initially move to a bias-on state
-            # self.status_rbv.set(Status.RAMP_ON)
             self.k.voltage_ramp_worker(voltage, step_size, time)
 
             self.status_rbv.set(voltage_status)
 
             # Select the correct wait time based on ramp status
             if ramp_status == Status.RAMP_OFF:
-                cothread.Sleep(self.hold_time.get())
+                await asyncio.sleep(self.hold_time.get())
             elif ramp_status == Status.RAMP_ON:
-                cothread.Sleep(self.pause_time.get())
+                await asyncio.sleep(self.pause_time.get())
 
         else:
             raise RuntimeError("Abort called.")
-
-    # def do_pause(self, pause: int) -> None:
-    #     if pause == 0:
-    #         self.pause_flag = False
-    #         self.cycle_rbv.set(True)
-    #         self.pause_cycle.Signal()
-    #     if pause == 1:
-    #         self.pause_flag = True
-    #         self.cycle_rbv.set(False)
 
     def do_stop(self, stop: int) -> None:
         # If stop called, abort and Ramp to OFF setpoint
@@ -369,7 +460,7 @@ class Ioc:
         self.k.source_voltage_ramp(to_volts, step_size, seconds)
         self.status_rbv.set(Status.VOLTAGE_OFF)
 
-    def configure(self) -> None:
+    async def configure(self) -> None:
         # Set to bypass arm event detector
         self.k.arm_direction("SOURCE")
         self.k.arm_source("IMMEDIATE")
@@ -398,7 +489,7 @@ class Ioc:
         # Wait until Keithley is in the correct configuration
         while queried != conf_func:
             queried = self.k.query_configure()
-            cothread.Sleep(1)
+            await asyncio.sleep(1)
 
         self.configured = True
         tprint("Configured!")
