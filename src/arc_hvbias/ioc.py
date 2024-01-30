@@ -2,18 +2,7 @@ import asyncio
 import math
 import warnings
 from datetime import datetime
-from typing import (
-    Any,
-    Awaitable,
-    Callable,
-    Coroutine,
-    Optional,
-    ParamSpec,
-    Tuple,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import Any, Callable, Coroutine, Union, cast
 
 # Import the basic framework components.
 from softioc import builder, softioc
@@ -386,7 +375,7 @@ class Ioc:
 
         except RuntimeError as e:
             self.k.abort_flag = True
-            self.k.voltage_ramp_worker(
+            self.k.source_voltage_ramp(
                 self.off_setpoint.get(), self.step_size.get(), self.rise_time.get()
             )
             self.status_rbv.set(Status.VOLTAGE_OFF)
@@ -417,7 +406,7 @@ class Ioc:
             self.status_rbv.set(ramp_status)
 
             # initially move to a bias-on state
-            self.k.voltage_ramp_worker(voltage, step_size, time)
+            self.k.source_voltage_ramp(voltage, step_size, time)
 
             self.status_rbv.set(voltage_status)
 
