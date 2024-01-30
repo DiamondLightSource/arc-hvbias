@@ -2,13 +2,12 @@
 Defines a connection to a Kiethley 2400 over serial and provides an interface
 to command and query the device
 """
+import asyncio
 import codecs
 import math
 import warnings
 from datetime import datetime
 from typing import List, Literal, Optional, Tuple, Union
-
-import cothread
 
 from .comms import Comms
 
@@ -181,9 +180,12 @@ class Keithley(object):
     def source_voltage_ramp(
         self, to_volts: float, step_size: float, seconds: float
     ) -> None:
-        cothread.Spawn(self.voltage_ramp_worker, *(to_volts, step_size, seconds))
+        asyncio.run_coroutine_threadsafe(
+            self.voltage_ramp_worker(to_volts, step_size, seconds),
+            asyncio.get_running_loop(),
+        )
 
-    def voltage_ramp_worker(
+    async def voltage_ramp_worker(
         self, to_volts: float, step_size: float, seconds: float
     ) -> None:
         """
@@ -219,7 +221,7 @@ class Keithley(object):
             self._comms.send_receive(f":SOURCE:VOLTAGE {voltage}".encode())
             self.get_voltage()
             voltage += step_size
-            cothread.Sleep(interval)
+            await asyncio.sleep(interval)
 
     startup_commands = """
 :syst:beep:stat 0
