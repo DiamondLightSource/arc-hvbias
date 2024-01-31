@@ -24,7 +24,7 @@ def tprint(string: str) -> None:
 _AsyncFuncType = Callable[..., Coroutine[Any, Any, Any]]
 
 
-def _if_connected(func: Awaitable) -> Awaitable:
+def _if_connected(func: _AsyncFuncType) -> _AsyncFuncType:
     """
     Check connection decorator before function call.
 
@@ -39,15 +39,14 @@ def _if_connected(func: Awaitable) -> Awaitable:
 
     """
 
-    def check_connection(*args, **kwargs) -> Union[Awaitable, bool]:
+    def check_connection(*args, **kwargs) -> Union[_AsyncFuncType, bool]:
         self = args[0]
         assert isinstance(self, Ioc)
-        if not self.connected.get() and self.configured:
-            print("Not connected to device. Try again once connection resumed.")
+        if not self.connected.get() and not self.configured:
             return True
         return func  # (*args, *kwargs)
 
-    return cast(Awaitable, check_connection)
+    return cast(_AsyncFuncType, check_connection)
 
 
 def _catch_exceptions(func: _AsyncFuncType) -> _AsyncFuncType:
@@ -76,8 +75,8 @@ async def _loop_forever(func: _AsyncFuncType) -> _AsyncFuncType:
     async def loop(*args, **kwargs) -> _AsyncFuncType:
         while True:
             await func(*args, *kwargs)
-        # # update loop at 2 Hz
-        # await asyncio.sleep(0.5)
+            # update loop at 5 Hz
+            await asyncio.sleep(0.2)
 
     return cast(_AsyncFuncType, loop)
 
@@ -227,10 +226,9 @@ class Ioc:
                 await asyncio.sleep(0.5)
                 self.connected.set(1)
                 await self.configure()
-        await asyncio.sleep(0.5)
 
-    @_if_connected
     @_loop_forever
+    @_if_connected
     async def calculate_healthy(self) -> None:
         """Determines if the Keithley is in a "Healthy" state.
 
@@ -251,10 +249,9 @@ class Ioc:
         )
         self.healthy_rbv.set(healthy)
 
-        await asyncio.sleep(0.01)
 
-    @_if_connected
     @_loop_forever
+    @_if_connected
     @_catch_exceptions
     async def set_param_rbvs(self) -> None:
         self.output_rbv.set(self.k.get_source_status())
@@ -268,10 +265,9 @@ class Ioc:
             self.voltage_rbv.set(float(volt))
             self.current_rbv.set(float(curr))
 
-        await asyncio.sleep(0.01)
 
-    @_if_connected
     @_loop_forever
+    @_if_connected
     @_catch_exceptions
     async def update_time_params(self) -> None:
         # TODO: This needs to be changed as won't work
