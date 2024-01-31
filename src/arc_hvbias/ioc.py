@@ -2,7 +2,7 @@ import asyncio
 import math
 import warnings
 from datetime import datetime
-from typing import Any, Callable, Coroutine, Union, cast
+from typing import Any, Awaitable, Callable, Coroutine, Union, cast
 
 # Import the basic framework components.
 from softioc import builder, softioc
@@ -21,11 +21,10 @@ def tprint(string: str) -> None:
     print(f"{datetime.now()} - {string}")
 
 
-# AsyncFuncType = Coroutine[Any, Any, Awaitable[Any]]
-AsyncFuncType = Coroutine[Any, Any, None]
+_AsyncFuncType = Callable[..., Coroutine[Any, Any, Any]]
 
 
-def _if_connected(func: AsyncFuncType) -> AsyncFuncType:
+def _if_connected(func: Awaitable) -> Awaitable:
     """
     Check connection decorator before function call.
 
@@ -40,7 +39,7 @@ def _if_connected(func: AsyncFuncType) -> AsyncFuncType:
 
     """
 
-    def check_connection(*args, **kwargs) -> Union[AsyncFuncType, bool]:
+    def check_connection(*args, **kwargs) -> Union[Awaitable, bool]:
         self = args[0]
         assert isinstance(self, Ioc)
         if not self.connected.get() and self.configured:
@@ -48,33 +47,39 @@ def _if_connected(func: AsyncFuncType) -> AsyncFuncType:
             return True
         return func  # (*args, *kwargs)
 
-    return cast(AsyncFuncType, check_connection)
+    return cast(Awaitable, check_connection)
 
 
-async def _catch_exceptions(func: AsyncFuncType) -> None:
-    try:
-        await func
-        # update loop at 2 Hz
-        await asyncio.sleep(0.5)
-    # except ValueError as e:
-    #     # catch conversion errors when device returns and error string
-    #     warnings.warn(f"{e}, {self.k.last_recv}")
-    #     # cothread.Yield()
-    except Exception as e:
-        warnings.warn(f"{e}")
-        await asyncio.sleep(0.001)
+def _catch_exceptions(func: _AsyncFuncType) -> _AsyncFuncType:
+    async def catch_exceptions(*args, **kwargs) -> None:
+        try:
+            await func(*args, **kwargs)
+            # update loop at 2 Hz
+            # await asyncio.sleep(0.5)
+        # except ValueError as e:
+        #     # catch conversion errors when device returns and error string
+        #     warnings.warn(f"{e}, {self.k.last_recv}")
+        #     # cothread.Yield()
+        except Exception as e:
+            warnings.warn(f"{e}")
+
+    return cast(_AsyncFuncType, catch_exceptions)
 
 
-async def _loop_forever(func: Callable) -> None:
+async def _loop_forever(func: _AsyncFuncType) -> _AsyncFuncType:
     """Wraps function in a while-true loop.
 
     Args:
-        func (AsyncFuncType): function to wrap in while-true loop
+        func (_AsyncFuncType): function to wrap in while-true loop
     """
-    while True:
-        func()
+
+    async def loop(*args, **kwargs) -> _AsyncFuncType:
+        while True:
+            await func(*args, *kwargs)
         # # update loop at 2 Hz
         # await asyncio.sleep(0.5)
+
+    return cast(_AsyncFuncType, loop)
 
 
 class Ioc:
@@ -249,8 +254,8 @@ class Ioc:
         await asyncio.sleep(0.01)
 
     @_if_connected
-    @_catch_exceptions
     @_loop_forever
+    @_catch_exceptions
     async def set_param_rbvs(self) -> None:
         self.output_rbv.set(self.k.get_source_status())
 
@@ -266,8 +271,8 @@ class Ioc:
         await asyncio.sleep(0.01)
 
     @_if_connected
-    @_catch_exceptions
     @_loop_forever
+    @_catch_exceptions
     async def update_time_params(self) -> None:
         # TODO: This needs to be changed as won't work
         if self.stop_flag:
