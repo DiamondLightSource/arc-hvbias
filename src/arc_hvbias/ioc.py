@@ -181,9 +181,7 @@ class Ioc:
         # self.pause_cycle = cothread.Event()
 
     async def run_forever(self) -> None:
-        """Run the ZeroMQ adapter continuously."""
-        self._send_message_queue: asyncio.Queue = asyncio.Queue()
-        self._recv_message_queue: asyncio.Queue = asyncio.Queue()
+        """Run the IOC methods continuously."""
 
         # try:
         #     if getattr(self, "_socket", None) is None:
