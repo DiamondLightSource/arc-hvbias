@@ -1,4 +1,5 @@
 import math
+from typing import Optional
 import warnings
 from datetime import datetime
 
@@ -107,7 +108,7 @@ class Ioc:
 
         # other state variables
         self.cycle_start_time: datetime = datetime.fromtimestamp(0)
-        self.cycle_stop_time: datetime = datetime.fromtimestamp(0)
+        self.cycle_stop_time: Optional[datetime] = None
         self.last_transition = datetime.now()
         # self.pause_flag = False
         self.stop_flag: bool = False
@@ -206,7 +207,7 @@ class Ioc:
                         self.time_since_rbv.set(int(self.time_since.total_seconds()))
 
                         # if max time exceeded since last cycle then force a cycle
-                        if self.cycle_finished and not self.cycle_failed:
+                        if self.cycle_finished and not self.cycle_failed and self.cycle_stop_time is not None:
                             if (
                                 datetime.now() - self.cycle_stop_time
                             ).total_seconds() > self.max_time.get():
@@ -243,7 +244,6 @@ class Ioc:
         cothread.Sleep(self.max_time.get())
 
         # Trigger cycle update loop to begin again
-        self.cycle_stop_time = datetime.now()
         self.pause_time_update.Signal()
 
     def cycle_control(self) -> None:
@@ -344,6 +344,7 @@ class Ioc:
         if stop == 1:
             self.cycle_rbv.set(0)
             self.stop_flag = True
+            self.cycle_stop_time = None
             self.k.abort()
             self.do_ramp_off(1)
             self.time_since_rbv.set(0)
