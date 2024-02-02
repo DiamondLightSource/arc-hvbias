@@ -183,10 +183,6 @@ class Ioc:
 
         self.configured: bool = False
 
-        # Boilerplate get the IOC started
-        builder.LoadDatabase()
-        softioc.iocInit()
-
         self.run_param_status_update = asyncio.Event()
         self.run_update_time_params = asyncio.Event()
         # self.pause_cycle = cothread.Event()
@@ -210,9 +206,6 @@ class Ioc:
                 self.update_time_params,
             ]
         )
-
-        # # Finally leave the IOC running with an interactive shell.
-        # softioc.interactive_ioc(globals())
 
     # -----------------------------------------------------------------------
     #                           Loop Methods
