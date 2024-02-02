@@ -1,3 +1,4 @@
+import asyncio
 from argparse import ArgumentParser
 
 from . import __version__
@@ -11,7 +12,8 @@ def main(args=None):
     parser.add_argument("--version", action="version", version=__version__)
     args = parser.parse_args(args)
 
-    Ioc()
+    a = Ioc()
+    asyncio.run(a.run_forever())
 
     # clean up
 
