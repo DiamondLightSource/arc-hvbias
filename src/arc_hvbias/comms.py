@@ -3,6 +3,7 @@ import asyncio
 # import logging
 import socket
 import warnings
+from select import select
 from typing import Optional
 
 # Constants
@@ -19,15 +20,19 @@ class Comms:
         self._endpoint = (ip, port)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.settimeout(TIMEOUT)
+        self._socket.setblocking(0)
         self._lock = asyncio.Lock()
 
     def connect(self):
         print(f"Connecting to {self._endpoint[0]}:{self._endpoint[1]}")
-        self._socket.connect(self._endpoint)
+        try:
+            self._socket.connect(self._endpoint)
+        except OSError as e:
+            print(e)
         # Clear initial connection messages
         # TODO: Are these useful? Use as confirmation of connection?
         # self._clear_socket()
-        self.clear_socket()
+        # self.clear_socket()
 
     def disconnect(self):
         self._socket.close()
@@ -62,7 +67,7 @@ class Comms:
         self._socket.send(self._format_message(request))
         # print(f"Sent {bytes_sent} byte(s)")
 
-    def _send_receive(self, request: bytes) -> Optional[bytes]:
+    async def _send_receive(self, request: bytes) -> Optional[bytes]:
         """Sends a request and attempts to decode the response. Does not determine if
         the response indicates acknowledgement from the device.
 
@@ -73,11 +78,13 @@ class Comms:
             Optional[bytes]: If the response could be decoded,
             then it is returned. Otherwise None is returned.
         """
-        with self._lock:
+        async with self._lock:
             self._send(request)
 
             if request.endswith(b"?"):
                 try:
+                    # ready = select([self._socket], [], [], TIMEOUT)
+                    # if ready[0]:
                     response = self._socket.recv(RECV_BUFFER)
                     return response
                 except UnicodeDecodeError as e:
@@ -99,7 +106,9 @@ class Comms:
             request was successful, otherwise None is returned.
         """
 
-        response = self._send_receive(request)
+        response = asyncio.run_coroutine_threadsafe(
+            self._send_receive(request), asyncio.get_running_loop()
+        )
         if response is None:
             return None
 

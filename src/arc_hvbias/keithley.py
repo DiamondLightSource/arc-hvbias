@@ -29,7 +29,7 @@ class Keithley(object):
         self.sweep_seconds = 0.0
         self.abort_flag = False
 
-        self.connect()
+        # self.connect()
 
     def __del__(self) -> None:
         if self._comms is not None:
