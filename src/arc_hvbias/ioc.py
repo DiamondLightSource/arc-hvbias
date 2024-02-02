@@ -24,6 +24,10 @@ def tprint(string: str) -> None:
 _AsyncFuncType = Callable[..., Coroutine[Any, Any, Any]]
 
 
+class AbortException(RuntimeError):
+    pass
+
+
 def _if_connected(func: _AsyncFuncType) -> _AsyncFuncType:
     """
     Check connection decorator before function call.
@@ -59,6 +63,8 @@ def _catch_exceptions(func: _AsyncFuncType) -> _AsyncFuncType:
         #     # catch conversion errors when device returns and error string
         #     warnings.warn(f"{e}, {self.k.last_recv}")
         #     # cothread.Yield()
+        except AbortException as e:
+            pass
         except Exception as e:
             warnings.warn(f"{e}")
 
@@ -170,7 +176,6 @@ class Ioc:
         self.cycle_stop_time: Optional[datetime] = None
         self.last_transition = datetime.now()
         # self.pause_flag = False
-        self.stop_flag: bool = False
         self.cycle_flag: bool = False
         self.cycle_finished: bool = False
 
@@ -268,10 +273,6 @@ class Ioc:
     @_if_connected
     @_catch_exceptions
     async def update_time_params(self) -> None:
-        # TODO: This needs to be changed as won't work
-        if self.stop_flag:
-            return
-
         # Pause thread if flag is False
         if not self.run_update_time_params.is_set():
             # Wait until flag become True
@@ -306,6 +307,7 @@ class Ioc:
     #                               Methods
     # -----------------------------------------------------------------------
 
+    @_catch_exceptions
     async def depolarise(self) -> None:
         # Pause time param update thread while initial depolarising occurring
         self.run_update_time_params.clear()
@@ -319,7 +321,10 @@ class Ioc:
         )
 
         tprint(f"Waiting MAX TIME -> {self.max_time.get()}s")
-        await asyncio.sleep(self.max_time.get())
+        timer: float = 0.0
+        while timer < self.max_time.get():
+            await asyncio.sleep(0.5)
+            timer += 0.5
 
         # Trigger cycle update loop to begin again
         self.cycle_stop_time = datetime.now()
@@ -330,6 +335,9 @@ class Ioc:
             self.cycle_flag = True
             await self.cycle_control()
 
+            await self._finish_cycle()
+
+    @_catch_exceptions
     async def _cycle(self, repeat: int) -> None:
         tprint(f"Starting Cycle No. {repeat}")
         await self._do_cycle(
@@ -346,50 +354,30 @@ class Ioc:
             Status.VOLTAGE_ON,
         )
 
+    @_catch_exceptions
     async def cycle_control(self) -> None:
         """
         Continuously perform a depolarisation cycle when the detector is idle
         or after max time
         """
-        self.stop_flag = False
         self.cycle_failed = False
         self.cycle_finished = False
         # Trigger cycle update loop to begin if the thread is paused
         self.run_update_time_params.set()
 
-        try:
-            tprint("Start Cycle")
-            # If already off, instantly set Time Since to 0 and also Ramp to ON, then wait MAX TIME
-            if math.isclose(self.voltage_rbv.get(), 0.0, abs_tol=volt_tol):
-                await self.depolarise()
+        tprint("Start Cycle")
+        # If already off, instantly set Time Since to 0 and also Ramp to ON, then wait MAX TIME
+        if math.isclose(self.voltage_rbv.get(), 0.0, abs_tol=volt_tol):
+            await self.depolarise()
 
-            tprint("Starting depolarisation cycle.")
-            self.cycle_rbv.set(True)
+        tprint("Starting depolarisation cycle.")
+        self.cycle_rbv.set(True)
 
-            # Begin depolarisation cycle
-            for repeat in range(self.repeats.get()):
-                await self._cycle(repeat)
+        # Begin depolarisation cycle
+        for repeat in range(self.repeats.get()):
+            await self._cycle(repeat)
 
-        except RuntimeError as e:
-            self.k.abort_flag = True
-            self.k.source_voltage_ramp(
-                self.off_setpoint.get(), self.step_size.get(), self.rise_time.get()
-            )
-            self.status_rbv.set(Status.VOLTAGE_OFF)
-            self.cycle_failed = True
-            tprint(f"/!\\ Cycle failed: {e}")
-
-        finally:
-            tprint("Finished depolarisation cycle.")
-            # Return Keithley to IDLE state
-            self.k.abort()
-
-            self.cycle_finished = True
-            self.cycle_stop_time = datetime.now()
-
-            self.cycle_rbv.set(False)
-            self.cycle_flag = False
-
+    @_catch_exceptions
     async def _do_cycle(
         self,
         voltage: float,
@@ -399,32 +387,54 @@ class Ioc:
     ) -> None:
         step_size = self.step_size.get()
 
-        if not self.stop_flag:
-            self.status_rbv.set(ramp_status)
+        self.status_rbv.set(ramp_status)
 
-            # initially move to a bias-on state
-            self.k.source_voltage_ramp(voltage, step_size, time)
+        # initially move to a bias-on state
+        self.k.source_voltage_ramp(voltage, step_size, time)
 
-            self.status_rbv.set(voltage_status)
+        self.status_rbv.set(voltage_status)
 
-            # Select the correct wait time based on ramp status
-            if ramp_status == Status.RAMP_OFF:
-                await asyncio.sleep(self.hold_time.get())
-            elif ramp_status == Status.RAMP_ON:
-                await asyncio.sleep(self.pause_time.get())
+        # Select the correct wait time based on ramp status
+        if ramp_status == Status.RAMP_OFF:
+            await asyncio.sleep(self.hold_time.get())
+        elif ramp_status == Status.RAMP_ON:
+            await asyncio.sleep(self.pause_time.get())
 
-        else:
-            raise RuntimeError("Abort called.")
+    async def _finish_cycle(self) -> None:
+        tprint("Finished cycle.")
+        # Return Keithley to IDLE state
+        self.k.abort()
 
-    def do_stop(self, stop: int) -> None:
+        self.cycle_finished = True
+        # If the cycle failed, we do not want to record the end time
+        if not self.cycle_failed:
+            self.cycle_stop_time = datetime.now()
+
+        self.cycle_rbv.set(False)
+        self.cycle_flag = False
+
+    async def do_stop(self, stop: int) -> None:
         # If stop called, abort and Ramp to OFF setpoint
         if stop == 1:
-            self.cycle_rbv.set(0)
-            self.stop_flag = True
-            self.cycle_stop_time = None
-            self.k.abort()
-            self.do_ramp_off(1)
-            self.time_since_rbv.set(0)
+            tprint(f"/!\\ Cycle Aborted.")
+
+            try:
+                # Raise error to propagate to other loops
+                raise AbortException("Abort called.")
+            finally:
+                # Pause time update thread if Abort exception raised
+                self.run_update_time_params.clear()
+
+                self.k.abort_flag = True
+                self.do_ramp_off()
+                self.cycle_failed = True
+
+                # If stop called before cycle was fully finished, make sure it is
+                if not self.cycle_finished:
+                    await self._finish_cycle()
+
+                self.cycle_stop_time = None
+                self.time_since_rbv.set(0)
 
     def do_ramp_on(self, start: int) -> None:
         tprint("Do RAMP ON")
