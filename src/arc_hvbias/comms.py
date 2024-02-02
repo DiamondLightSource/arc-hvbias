@@ -1,9 +1,9 @@
+import asyncio
+
 # import logging
 import socket
 import warnings
 from typing import Optional
-
-import cothread
 
 # Constants
 CR = "\r"
@@ -19,7 +19,7 @@ class Comms:
         self._endpoint = (ip, port)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.settimeout(TIMEOUT)
-        self._lock = cothread.RLock()
+        self._lock = asyncio.Lock()
 
     def connect(self):
         print(f"Connecting to {self._endpoint[0]}:{self._endpoint[1]}")
