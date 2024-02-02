@@ -2,7 +2,7 @@ import asyncio
 import math
 import warnings
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Coroutine, Union, cast
+from typing import Any, Callable, Coroutine, Optional, Union, cast
 
 # Import the basic framework components.
 from softioc import builder, softioc
@@ -249,7 +249,6 @@ class Ioc:
         )
         self.healthy_rbv.set(healthy)
 
-
     @_loop_forever
     @_if_connected
     @_catch_exceptions
@@ -264,7 +263,6 @@ class Ioc:
             volt, curr, res, time, stat = self.k.read()
             self.voltage_rbv.set(float(volt))
             self.current_rbv.set(float(curr))
-
 
     @_loop_forever
     @_if_connected
