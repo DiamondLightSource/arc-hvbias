@@ -55,14 +55,16 @@ def _if_connected(func: _AsyncFuncType) -> _AsyncFuncType:
 
 def _catch_exceptions(func: _AsyncFuncType) -> _AsyncFuncType:
     async def catch_exceptions(*args, **kwargs) -> None:
+        self = args[0]
+        assert isinstance(self, Ioc)
         try:
             await func(*args, **kwargs)
             # update loop at 2 Hz
             # await asyncio.sleep(0.5)
-        # except ValueError as e:
-        #     # catch conversion errors when device returns and error string
-        #     warnings.warn(f"{e}, {self.k.last_recv}")
-        #     # cothread.Yield()
+        except ValueError as e:
+            # catch conversion errors when device returns and error string
+            warnings.warn(f"{e}, {self.k.last_recv}")
+            # cothread.Yield()
         except AbortException as e:
             pass
         except Exception as e:
@@ -309,6 +311,10 @@ class Ioc:
 
     @_catch_exceptions
     async def depolarise(self) -> None:
+        """Carry out an initial depolarisation cycle with a MAX TIME wait after.
+
+        This is only called if a cycle is started with the voltage at off_setpoint.
+        """
         # Pause time param update thread while initial depolarising occurring
         self.run_update_time_params.clear()
 
@@ -357,8 +363,7 @@ class Ioc:
     @_catch_exceptions
     async def cycle_control(self) -> None:
         """
-        Continuously perform a depolarisation cycle when the detector is idle
-        or after max time
+        Perform a depolarisation cycle <repeat> times.
         """
         self.cycle_failed = False
         self.cycle_finished = False
