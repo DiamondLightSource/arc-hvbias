@@ -48,7 +48,7 @@ def _if_connected(func: _AsyncFuncType) -> _AsyncFuncType:
         assert isinstance(self, Ioc)
         if not self.connected.get() and not self.configured:
             return True
-        return func  # (*args, *kwargs)
+        return func
 
     return cast(_AsyncFuncType, check_connection)
 
@@ -73,20 +73,20 @@ def _catch_exceptions(func: _AsyncFuncType) -> _AsyncFuncType:
     return cast(_AsyncFuncType, catch_exceptions)
 
 
-async def _loop_forever(func: _AsyncFuncType) -> _AsyncFuncType:
+def _loop_forever(func: _AsyncFuncType) -> _AsyncFuncType:
     """Wraps function in a while-true loop.
 
     Args:
         func (_AsyncFuncType): function to wrap in while-true loop
     """
 
-    async def loop(*args, **kwargs) -> _AsyncFuncType:
+    async def _loop(*args, **kwargs) -> None:
         while True:
-            await func(*args, *kwargs)
             # update loop at 5 Hz
-            await asyncio.sleep(0.2)
+            await func(*args, **kwargs)
+            # await asyncio.sleep(0.2)
 
-    return cast(_AsyncFuncType, loop)
+    return cast(_AsyncFuncType, _loop)
 
 
 class Ioc:
@@ -200,10 +200,10 @@ class Ioc:
 
         await asyncio.gather(
             *[
-                self.connection_check,
-                self.calculate_healthy,
-                self.set_param_rbvs,
-                self.update_time_params,
+                self.connection_check(),
+                self.calculate_healthy(),
+                self.set_param_rbvs(),
+                self.update_time_params(),
             ]
         )
 
@@ -424,7 +424,7 @@ class Ioc:
                 self.run_update_time_params.clear()
 
                 self.k.abort_flag = True
-                self.do_ramp_off()
+                self.do_ramp_off(1)
                 self.cycle_failed = True
 
                 # If stop called before cycle was fully finished, make sure it is
