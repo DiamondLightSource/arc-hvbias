@@ -95,7 +95,7 @@ class Comms:
         # self._log.debug(f"Received response:\n{self._format_message(decoded_response)}")
         return None
 
-    def send_receive(self, request: bytes) -> Optional[bytes]:
+    async def send_receive(self, request: bytes) -> Optional[bytes]:
         """Sends a request and attempts to decode the response.
 
         Args:
@@ -106,9 +106,8 @@ class Comms:
             request was successful, otherwise None is returned.
         """
 
-        response = asyncio.run_coroutine_threadsafe(
-            self._send_receive(request), asyncio.get_running_loop()
-        )
+        response = await self._send_receive(request)
+
         if response is None:
             return None
 

@@ -214,12 +214,12 @@ class Ioc:
     @_loop_forever
     async def connection_check(self) -> None:
         """Loop to constantly check if connected to the device."""
-        is_connected, model = self.k.check_connected()
+        is_connected, model = await self.k.check_connected()
         if not is_connected:
             self.connected.set(0)
             self.configured = False
             tprint("Connection lost. Attempting to reconnect...")
-            self.k.connect()
+            await self.k.connect()
         else:
             if not self.connected.get():
                 tprint(f"Connected to device: {model}")
@@ -260,7 +260,7 @@ class Ioc:
 
         # Read data elements and unpack into vars, if Source is ON
         if self.output_rbv.get() == 1:
-            volt, curr, res, time, stat = self.k.read()
+            volt, curr, res, time, stat = await self.k.read()
             self.voltage_rbv.set(float(volt))
             self.current_rbv.set(float(curr))
 
@@ -401,7 +401,7 @@ class Ioc:
     async def _finish_cycle(self) -> None:
         tprint("Finished cycle.")
         # Return Keithley to IDLE state
-        self.k.abort()
+        await self.k.abort()
 
         self.cycle_finished = True
         # If the cycle failed, we do not want to record the end time
@@ -456,26 +456,26 @@ class Ioc:
 
     async def configure(self) -> None:
         # Set to bypass arm event detector
-        self.k.arm_direction("SOURCE")
-        self.k.arm_source("IMMEDIATE")
+        await self.k.arm_direction("SOURCE")
+        await self.k.arm_source("IMMEDIATE")
 
         # Set to bypass trigger event detector
-        self.k.trigger_direction("SOURCE")
-        self.k.trigger_source("IMMEDIATE")
+        await self.k.trigger_direction("SOURCE")
+        await self.k.trigger_source("IMMEDIATE")
 
         # Make sure source isn't turned off after a measurement
-        self.k.source_auto_clear("OFF")
+        await self.k.source_auto_clear("OFF")
 
         # Set the data elements we want to read back
-        self.k.set_data_elements()
+        await self.k.set_data_elements()
 
-        self.k.trigger_count(1)
+        await self.k.trigger_count(1)
 
         # Configure string for Keithley function
         conf_func = '"VOLT:DC","CURR:DC"'
 
         # Send function configure string to Keithley
-        self.k.configure(conf_func)
+        await self.k.configure(conf_func)
 
         # Query if the Keithley is in the correct configuration
         queried = self.k.query_configure()
