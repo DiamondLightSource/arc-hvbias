@@ -36,10 +36,10 @@ def _if_connected(func: _AsyncFuncType) -> _AsyncFuncType:
     device before calling the attached function.
 
     Args:
-        func (Awaitable): Function to call if connected to device
+        func (_AsyncFuncType): Function to call if connected to device
 
     Returns:
-        Awaitable: The function to wrap func in.
+        Union[_AsyncFuncType, bool]: The function or True.
 
     """
 
@@ -54,6 +54,15 @@ def _if_connected(func: _AsyncFuncType) -> _AsyncFuncType:
 
 
 def _catch_exceptions(func: _AsyncFuncType) -> _AsyncFuncType:
+    """Wraps function in a try-catch handler.
+
+    Args:
+        func (_AsyncFuncType): function to wrap in try-catch handler
+
+    Returns:
+        _AsyncFuncType: Wrapped function
+    """
+
     async def catch_exceptions(*args, **kwargs) -> None:
         self = args[0]
         assert isinstance(self, Ioc)
@@ -78,6 +87,9 @@ def _loop_forever(func: _AsyncFuncType) -> _AsyncFuncType:
 
     Args:
         func (_AsyncFuncType): function to wrap in while-true loop
+
+    Returns:
+        _AsyncFuncType: Wrapped function
     """
 
     async def _loop(*args, **kwargs) -> None:
