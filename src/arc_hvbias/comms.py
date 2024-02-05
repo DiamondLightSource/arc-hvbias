@@ -20,7 +20,7 @@ class Comms:
         self._endpoint = (ip, port)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.settimeout(TIMEOUT)
-        self._socket.setblocking(0)
+        self._socket.setblocking(False)
         self._lock = asyncio.Lock()
 
     def connect(self):
@@ -28,7 +28,7 @@ class Comms:
         try:
             self._socket.connect(self._endpoint)
         except OSError as e:
-            print(e)
+            print("OSError:", e)
         # Clear initial connection messages
         # TODO: Are these useful? Use as confirmation of connection?
         # self._clear_socket()
@@ -63,9 +63,15 @@ class Comms:
         Args:
             request (str): The request string to send.
         """
-        # print(f"Sending request:\n{self._format_message(request)}")
-        self._socket.send(self._format_message(request))
-        # print(f"Sent {bytes_sent} byte(s)")
+        try:
+            # print(f"Sending request:\n{self._format_message(request)}")
+            self._socket.send(self._format_message(request))
+            # print(f"Sent {bytes_sent} byte(s)")
+        except BrokenPipeError as e:
+            print("Pipe broken, make sure device is connected.")
+            raise socket.timeout
+        except BlockingIOError as e:
+            print("IO blocked, make sure device is connected.")
 
     async def _send_receive(self, request: bytes) -> Optional[bytes]:
         """Sends a request and attempts to decode the response. Does not determine if
@@ -79,18 +85,18 @@ class Comms:
             then it is returned. Otherwise None is returned.
         """
         async with self._lock:
-            self._send(request)
+            try:
+                self._send(request)
 
-            if request.endswith(b"?"):
-                try:
+                if request.endswith(b"?"):
                     # ready = select([self._socket], [], [], TIMEOUT)
                     # if ready[0]:
                     response = self._socket.recv(RECV_BUFFER)
                     return response
-                except UnicodeDecodeError as e:
-                    warnings.warn(f"{e}:\n{self._format_message(response).decode()}")
-                except socket.timeout:
-                    warnings.warn("Didn't receive a response in time.")
+            # except UnicodeDecodeError as e:
+            #     warnings.warn(f"{e}:\n{self._format_message(response).decode()}")
+            except socket.timeout:
+                warnings.warn("Didn't receive a response in time.")
 
         # self._log.debug(f"Received response:\n{self._format_message(decoded_response)}")
         return None
