@@ -11,6 +11,9 @@ CR = "\r"
 TIMEOUT = 1.0  # Seconds
 RECV_BUFFER = 4096  # Bytes
 
+# Make sure socket is made with a timeout on creation
+socket.setdefaulttimeout(TIMEOUT)
+
 
 class Comms:
     def __init__(self, ip: str, port: int):
@@ -19,8 +22,6 @@ class Comms:
 
         self._endpoint = (ip, port)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._socket.settimeout(TIMEOUT)
-        self._socket.setblocking(False)
         self._lock = asyncio.Lock()
 
     async def connect(self):
