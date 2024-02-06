@@ -36,7 +36,7 @@ class Keithley(object):
             self._comms.disconnect()
 
     async def connect(self) -> None:
-        self._comms.connect()
+        await self._comms.connect()
 
         await self._comms.send_receive("".encode())
         await self._comms.send_receive("*RST".encode())
@@ -181,13 +181,10 @@ class Keithley(object):
         result = await self._comms.send_receive(":OUTPUT:STATE?".encode())
         return int(result.decode()) if result is not None else 0
 
-    def source_voltage_ramp(
+    async def source_voltage_ramp(
         self, to_volts: float, step_size: float, seconds: float
     ) -> None:
-        asyncio.run_coroutine_threadsafe(
-            self.voltage_ramp_worker(to_volts, step_size, seconds),
-            asyncio.get_running_loop(),
-        )
+        await self.voltage_ramp_worker(to_volts, step_size, seconds)
 
     async def voltage_ramp_worker(
         self, to_volts: float, step_size: float, seconds: float
