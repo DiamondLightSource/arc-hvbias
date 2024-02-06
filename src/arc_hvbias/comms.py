@@ -23,7 +23,7 @@ class Comms:
         self._socket.setblocking(False)
         self._lock = asyncio.Lock()
 
-    def connect(self):
+    async def connect(self):
         print(f"Connecting to {self._endpoint[0]}:{self._endpoint[1]}")
         try:
             self._socket.connect(self._endpoint)
@@ -66,10 +66,8 @@ class Comms:
         try:
             # print(f"Sending request:\n{self._format_message(request)}")
             self._socket.send(self._format_message(request))
-            # print(f"Sent {bytes_sent} byte(s)")
         except BrokenPipeError as e:
-            print("Pipe broken, make sure device is connected.")
-            raise socket.timeout
+            warnings.warn("Pipe broken, make sure device is connected.")
         except BlockingIOError as e:
             print("IO blocked, make sure device is connected.")
 
