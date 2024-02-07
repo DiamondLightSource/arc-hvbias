@@ -185,7 +185,7 @@ class Ioc:
         self.max_time = builder.longOut("MAX-TIME", initial_value=900)
 
         # other state variables
-        self.at_voltage_time: datetime = datetime.fromtimestamp(0)
+        self.at_voltage_time: Optional[datetime] = None
         self.cycle_stop_time: Optional[datetime] = None
         self.last_transition = datetime.now()
         # self.pause_flag = False
@@ -196,6 +196,11 @@ class Ioc:
 
         self.run_param_status_update = asyncio.Event()
         self.run_update_time_params = asyncio.Event()
+        self.run_cycle_control = asyncio.Event()
+        # Make sure cycles are not started on boot
+        self.run_cycle_control.clear()
+
+        self.task_group = asyncio.TaskGroup()
         # self.pause_cycle = cothread.Event()
 
     async def run_forever(self) -> None:
@@ -209,12 +214,13 @@ class Ioc:
 
         self.running = True
 
-        async with asyncio.TaskGroup() as tg:
+        async with self.task_group as tg:
             for task in [
                 self.connection_check(),
                 self.calculate_healthy(),
                 self.set_param_rbvs(),
                 self.update_time_params(),
+                self.cycle_control(),
             ]:
                 tg.create_task(task)
 
@@ -301,7 +307,7 @@ class Ioc:
                 # Set this is cycle_start_time
                 self.at_voltage_time = datetime.now()
 
-        if self.at_voltage_time != datetime.fromtimestamp(0):
+        if self.at_voltage_time is not None:
             self.time_since = datetime.now() - self.at_voltage_time
             self.time_since_rbv.set(int(self.time_since.total_seconds()))
 
@@ -314,7 +320,42 @@ class Ioc:
                 if (
                     datetime.now() - self.cycle_stop_time
                 ).total_seconds() > self.max_time.get():
-                    await self.do_start_cycle(do=1)
+                    self.run_cycle_control.set()
+
+    @_loop_forever
+    @_if_connected
+    @_catch_exceptions
+    async def cycle_control(self) -> None:
+        """
+        Perform a depolarisation cycle <repeat> times.
+        """
+        # Pause thread if flag is False
+        if not self.run_cycle_control.is_set():
+            # Wait until flag become True
+            await self.run_cycle_control.wait()
+
+        self.cycle_failed = False
+        self.cycle_finished = False
+        # Trigger cycle update loop to begin if the thread is paused
+        self.run_update_time_params.set()
+
+        tprint("Start Cycle")
+        # If already off, instantly set Time Since to 0 and also Ramp to ON, then wait MAX TIME
+        if math.isclose(self.voltage_rbv.get(), 0.0, abs_tol=volt_tol):
+            await self.depolarise()
+
+        tprint("Starting depolarisation cycle.")
+        self.cycle_flag = True
+        self.cycle_rbv.set(True)
+
+        # Begin depolarisation cycle
+        for repeat in range(self.repeats.get()):
+            await self._cycle(repeat)
+
+        await self._finish_cycle()
+
+        # At end of cycle clear the flag
+        self.run_cycle_control.clear()
 
     # -----------------------------------------------------------------------
     #                               Methods
@@ -350,9 +391,9 @@ class Ioc:
 
     async def do_start_cycle(self, do: int) -> None:
         if do == 1 and not self.cycle_rbv.get():
-            await self.cycle_control()
 
-            await self._finish_cycle()
+            # Unpause the cycle control loop
+            self.run_cycle_control.set()
 
     @_catch_exceptions
     async def _cycle(self, repeat: int) -> None:
@@ -370,29 +411,6 @@ class Ioc:
             Status.RAMP_ON,
             Status.VOLTAGE_ON,
         )
-
-    @_catch_exceptions
-    async def cycle_control(self) -> None:
-        """
-        Perform a depolarisation cycle <repeat> times.
-        """
-        self.cycle_failed = False
-        self.cycle_finished = False
-        # Trigger cycle update loop to begin if the thread is paused
-        self.run_update_time_params.set()
-
-        tprint("Start Cycle")
-        # If already off, instantly set Time Since to 0 and also Ramp to ON, then wait MAX TIME
-        if math.isclose(self.voltage_rbv.get(), 0.0, abs_tol=volt_tol):
-            await self.depolarise()
-
-        tprint("Starting depolarisation cycle.")
-        self.cycle_flag = True
-        self.cycle_rbv.set(True)
-
-        # Begin depolarisation cycle
-        for repeat in range(self.repeats.get()):
-            await self._cycle(repeat)
 
     @_catch_exceptions
     async def _do_cycle(
@@ -437,12 +455,14 @@ class Ioc:
 
             try:
                 # Raise error to propagate to other loops
+                self.k.abort_flag = True
                 raise AbortException("Abort called.")
             finally:
                 # Pause time update thread if Abort exception raised
                 self.run_update_time_params.clear()
+                # Stop the cycle thread
+                self.run_cycle_control.clear()
 
-                self.k.abort_flag = True
                 await self.do_ramp_off(1)
                 self.cycle_failed = True
 
@@ -450,6 +470,7 @@ class Ioc:
                 if not self.cycle_finished:
                     await self._finish_cycle()
 
+                self.at_voltage_time = None
                 self.cycle_stop_time = None
                 self.time_since_rbv.set(0)
 
