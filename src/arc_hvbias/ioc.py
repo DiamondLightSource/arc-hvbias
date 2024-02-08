@@ -2,7 +2,7 @@ import asyncio
 import math
 import warnings
 from datetime import datetime
-from typing import Any, Callable, Coroutine, Optional, cast
+from typing import Any, Callable, Coroutine, List, Optional, cast
 
 # Import the basic framework components.
 from softioc import builder, softioc
@@ -100,6 +100,17 @@ def _loop_forever(func: _AsyncFuncType) -> _AsyncFuncType:
     return cast(_AsyncFuncType, _loop)
 
 
+def _shielded(func: _AsyncFuncType) -> _AsyncFuncType:
+    """
+    Makes so an awaitable method is always shielded from cancellation
+    """
+
+    async def _shield(*args, **kwargs):
+        return await asyncio.shield(func(*args, **kwargs))
+
+    return _shield
+
+
 class Ioc:
     """
     A Soft IOC to provide the PVs to control and monitor the Keithley class
@@ -194,13 +205,16 @@ class Ioc:
 
         self.configured: bool = False
 
+        self.abort: bool = False
+
         self.run_param_status_update = asyncio.Event()
         self.run_update_time_params = asyncio.Event()
         self.run_cycle_control = asyncio.Event()
         # Make sure cycles are not started on boot
         self.run_cycle_control.clear()
 
-        self.task_group = asyncio.TaskGroup()
+        self.task_group_1 = asyncio.TaskGroup()
+        self.task_group_2 = asyncio.TaskGroup()
         # self.pause_cycle = cothread.Event()
 
     async def run_forever(self) -> None:
@@ -214,20 +228,48 @@ class Ioc:
 
         self.running = True
 
-        async with self.task_group as tg:
-            for task in [
-                self.connection_check(),
-                self.calculate_healthy(),
-                self.set_param_rbvs(),
-                self.update_time_params(),
-                self.cycle_control(),
-            ]:
-                tg.create_task(task)
+        _task_list: List[asyncio.Task] = []
+
+        tg1: List[Coroutine[Any, Any, Any]] = [
+            self.connection_check(),
+            self.calculate_healthy(),
+            self.set_param_rbvs(),
+        ]
+        tg2: List[Coroutine[Any, Any, Any]] = [
+            self.update_time_params(),
+            self.cycle_control(),
+            self.check_abort(),
+        ]
+
+        async def create_task_group(
+            task_group: asyncio.TaskGroup,
+            tasks: List[Coroutine[Any, Any, Any]],
+            task_group2: asyncio.TaskGroup,
+            tasks2: List[Coroutine[Any, Any, Any]],
+        ) -> None:
+            # handle exceptions
+            try:
+                async with task_group as tg, task_group2 as tg2:
+                    for task in tasks:
+                        t = tg.create_task(task)
+                        _task_list.append(t)
+                    for task in tasks2:
+                        t2 = tg2.create_task(task)
+                        _task_list.append(t2)
+            except* AbortException as err:
+                print(f"{err=}")
+            await asyncio.sleep(0)
+
+        await create_task_group(self.task_group_1, tg1, self.task_group_2, tg2)
+
+        for i, task in enumerate(_task_list):
+            print(f"Task{i}: done={task.done()}, cancelled={task.cancelled()}")
 
     # -----------------------------------------------------------------------
     #                           Loop Methods
     # -----------------------------------------------------------------------
 
+    @_shielded
     @_loop_forever
     async def connection_check(self) -> None:
         """Loop to constantly check if connected to the device."""
@@ -251,6 +293,7 @@ class Ioc:
                 self.connected.set(1)
                 await self.configure()
 
+    @_shielded
     @_loop_forever
     @_if_connected
     async def calculate_healthy(self) -> None:
@@ -273,6 +316,7 @@ class Ioc:
         )
         self.healthy_rbv.set(healthy)
 
+    @_shielded
     @_loop_forever
     @_if_connected
     @_catch_exceptions
@@ -356,6 +400,12 @@ class Ioc:
 
         # At end of cycle clear the flag
         self.run_cycle_control.clear()
+
+    @_loop_forever
+    @_if_connected
+    async def check_abort(self) -> None:
+        if self.abort:
+            await self.raise_abort()
 
     # -----------------------------------------------------------------------
     #                               Methods
@@ -448,20 +498,32 @@ class Ioc:
         self.cycle_rbv.set(False)
         self.cycle_flag = False
 
+    async def raise_abort(self) -> None:
+        tprint("raise abort")
+        self.k.abort_flag = True
+        # Raise error to propagate to other tasks in TaskGroup
+        raise AbortException("Abort called.")
+
     async def do_stop(self, stop: int) -> None:
         # If stop called, abort and Ramp to OFF setpoint
         if stop == 1:
             tprint(f"/!\\ Cycle Aborted.")
 
             try:
-                # Raise error to propagate to other loops
-                self.k.abort_flag = True
-                raise AbortException("Abort called.")
+                self.abort = True
             finally:
                 # Pause time update thread if Abort exception raised
                 self.run_update_time_params.clear()
                 # Stop the cycle thread
                 self.run_cycle_control.clear()
+
+                async def _tasks_done() -> None:
+                    assert isinstance(self.task_group_2._tasks, set)
+                    while len(self.task_group_2._tasks) != 0:
+                        await asyncio.sleep(1)
+
+                # wait for all tasks to be "cancelled"
+                await asyncio.wait_for(_tasks_done(), timeout=None)
 
                 await self.do_ramp_off(1)
                 self.cycle_failed = True
