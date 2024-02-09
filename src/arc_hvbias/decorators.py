@@ -1,10 +1,14 @@
 import asyncio
 import warnings
-from typing import Any, Callable, Coroutine, List, Optional, cast
+from typing import Any, Callable, Coroutine, cast
 
-from .ioc import AbortException, Ioc
+# from .ioc import Ioc
 
 _AsyncFuncType = Callable[..., Coroutine[Any, Any, Any]]
+
+
+class AbortException(RuntimeError):
+    pass
 
 
 def _if_connected(func: _AsyncFuncType) -> _AsyncFuncType:
@@ -24,7 +28,7 @@ def _if_connected(func: _AsyncFuncType) -> _AsyncFuncType:
 
     async def check_connection(*args, **kwargs) -> None:
         self = args[0]
-        assert isinstance(self, Ioc)
+        # assert isinstance(self, Ioc)
         if self.connected.get() and self.configured:
             await func(*args, **kwargs)
 
@@ -48,7 +52,7 @@ def _if_source_on(func: _AsyncFuncType) -> _AsyncFuncType:
 
     async def check_source_on(*args, **kwargs) -> None:
         self = args[0]
-        assert isinstance(self, Ioc)
+        # assert isinstance(self, Ioc)
         if self.output_rbv.get():
             await func(*args, **kwargs)
         else:
@@ -69,7 +73,7 @@ def _catch_exceptions(func: _AsyncFuncType) -> _AsyncFuncType:
 
     async def catch_exceptions(*args, **kwargs) -> None:
         self = args[0]
-        assert isinstance(self, Ioc)
+        # assert isinstance(self, Ioc)
         try:
             await func(*args, **kwargs)
         except ValueError as e:

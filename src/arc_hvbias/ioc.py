@@ -8,6 +8,7 @@ from typing import Any, Callable, Coroutine, List, Optional, cast
 from softioc import builder, softioc
 
 from .decorators import (
+    AbortException,
     _catch_exceptions,
     _if_connected,
     _if_source_on,
@@ -26,10 +27,6 @@ volt_tol = 5e-1
 # for debugging
 def tprint(string: str) -> None:
     print(f"{datetime.now()} - {string}")
-
-
-class AbortException(RuntimeError):
-    pass
 
 
 class Ioc:
