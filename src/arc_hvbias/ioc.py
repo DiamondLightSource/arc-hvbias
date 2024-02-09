@@ -7,6 +7,13 @@ from typing import Any, Callable, Coroutine, List, Optional, cast
 # Import the basic framework components.
 from softioc import builder, softioc
 
+from .decorators import (
+    _catch_exceptions,
+    _if_connected,
+    _if_source_on,
+    _loop_forever,
+    _shielded,
+)
 from .keithley import Keithley
 from .status import Status
 
@@ -21,94 +28,8 @@ def tprint(string: str) -> None:
     print(f"{datetime.now()} - {string}")
 
 
-_AsyncFuncType = Callable[..., Coroutine[Any, Any, Any]]
-
-
 class AbortException(RuntimeError):
     pass
-
-
-def _if_connected(func: _AsyncFuncType) -> _AsyncFuncType:
-    """
-    Check connection decorator before function call.
-
-    Decorator function to check if the wrapper is connected to the motion controller
-    device before calling the attached function.
-
-    Args:
-        func (_AsyncFuncType): Function to call if connected to device
-
-    Returns:
-        Union[_AsyncFuncType, bool]: The function or True.
-
-    """
-
-    async def check_connection(*args, **kwargs) -> None:
-        self = args[0]
-        assert isinstance(self, Ioc)
-        if self.connected.get() and self.configured:
-            await func(*args, **kwargs)
-
-    return cast(_AsyncFuncType, check_connection)
-
-
-def _catch_exceptions(func: _AsyncFuncType) -> _AsyncFuncType:
-    """Wraps function in a try-catch handler.
-
-    Args:
-        func (_AsyncFuncType): function to wrap in try-catch handler
-
-    Returns:
-        _AsyncFuncType: Wrapped function
-    """
-
-    async def catch_exceptions(*args, **kwargs) -> None:
-        self = args[0]
-        assert isinstance(self, Ioc)
-        try:
-            await func(*args, **kwargs)
-        except ValueError as e:
-            # catch conversion errors when device returns and error string
-            warnings.warn(f"{e}, {self.k.last_recv}")
-            # cothread.Yield()
-        except AbortException as e:
-            # pass
-            print("AbortException")
-        except Exception as e:
-            warnings.warn(f"{e}")
-
-    return cast(_AsyncFuncType, catch_exceptions)
-
-
-def _loop_forever(func: _AsyncFuncType) -> _AsyncFuncType:
-    """Wraps function in a while-true loop.
-
-    Args:
-        func (_AsyncFuncType): function to wrap in while-true loop
-
-    Returns:
-        _AsyncFuncType: Wrapped function
-    """
-
-    async def _loop(*args, **kwargs) -> None:
-        while True:
-            await func(*args, **kwargs)
-
-            # Update at 5Hz
-            await asyncio.sleep(0.2)
-
-    return cast(_AsyncFuncType, _loop)
-
-
-def _shielded(func: _AsyncFuncType) -> _AsyncFuncType:
-    """
-    Makes so an awaitable method is always shielded from cancellation
-    """
-
-    async def _shield(*args, **kwargs):
-        return await asyncio.shield(func(*args, **kwargs))
-
-    return _shield
 
 
 class Ioc:
@@ -439,9 +360,9 @@ class Ioc:
         self.cycle_stop_time = datetime.now()
         self.run_update_time_params.set()
 
+    @_if_source_on
     async def do_start_cycle(self, do: int) -> None:
         if do == 1 and not self.cycle_rbv.get():
-
             # Unpause the cycle control loop
             self.run_cycle_control.set()
 
@@ -536,6 +457,7 @@ class Ioc:
                 self.cycle_stop_time = None
                 self.time_since_rbv.set(0)
 
+    @_if_source_on
     async def do_ramp_on(self, start: int) -> None:
         tprint("Do RAMP ON")
 
@@ -546,6 +468,7 @@ class Ioc:
         await self.k.source_voltage_ramp(to_volts, step_size, seconds)
         self.status_rbv.set(Status.VOLTAGE_ON)
 
+    @_if_source_on
     async def do_ramp_off(self, start: int) -> None:
         tprint("Do RAMP OFF")
 
