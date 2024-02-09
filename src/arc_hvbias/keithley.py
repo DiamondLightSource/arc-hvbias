@@ -15,6 +15,12 @@ MAX_HZ = 20
 LOOP_OVERHEAD = 0.03
 
 
+async def _async_range(count):
+    for i in range(count):
+        yield (i)
+        await asyncio.sleep(0.0)
+
+
 class Keithley(object):
     def __init__(
         self,
@@ -216,13 +222,15 @@ class Keithley(object):
 
         await self._comms.send_receive(":SOURCE:FUNCTION:MODE VOLTAGE".encode())
         await self._comms.send_receive(":SOURCE:VOLTAGE:MODE FIXED".encode())
-        for step in range(steps + 1):
+        async for step in _async_range(steps + 1):
             if self.abort_flag:
                 break
             await self._comms.send_receive(f":SOURCE:VOLTAGE {voltage}".encode())
             voltage = await self.get_voltage()
             voltage += step_size
             await asyncio.sleep(interval)
+            # Relinquish control
+            await asyncio.sleep(0)
 
     startup_commands = """
 :syst:beep:stat 0
