@@ -1,5 +1,6 @@
 import asyncio
 import math
+import threading
 import warnings
 from datetime import datetime
 from typing import Any, Callable, Coroutine, List, Optional, cast
@@ -131,9 +132,31 @@ class Ioc:
         # Make sure cycles are not started on boot
         self.run_cycle_control.clear()
 
+        self._cycle_thread: Optional[threading.Thread] = None
+
+        self._task_list: List[asyncio.Task] = []
         self.task_group_1 = asyncio.TaskGroup()
         self.task_group_2 = asyncio.TaskGroup()
         # self.pause_cycle = cothread.Event()
+
+    async def _run_loops(
+        self, task_group: asyncio.TaskGroup, task_list: List[Coroutine[Any, Any, Any]]
+    ) -> None:
+        async def create_task_group(
+            task_group: asyncio.TaskGroup,
+            tasks: List[Coroutine[Any, Any, Any]],
+        ) -> None:
+            # handle exceptions
+            try:
+                async with task_group as tg:
+                    for task in tasks:
+                        t = tg.create_task(task)
+                        self._task_list.append(t)
+            except* AbortException as err:
+                print(f"{err=}")
+            await asyncio.sleep(0)
+
+        await create_task_group(task_group, task_list)
 
     async def run_forever(self) -> None:
         """Run the IOC methods continuously."""
@@ -146,12 +169,11 @@ class Ioc:
 
         self.running = True
 
-        _task_list: List[asyncio.Task] = []
-
         tg1: List[Coroutine[Any, Any, Any]] = [
             self.connection_check(),
             self.calculate_healthy(),
             self.set_param_rbvs(),
+            self.check_cycle_thread(),
         ]
         tg2: List[Coroutine[Any, Any, Any]] = [
             self.update_time_params(),
@@ -159,28 +181,17 @@ class Ioc:
             self.check_abort(),
         ]
 
-        async def create_task_group(
-            task_group: asyncio.TaskGroup,
-            tasks: List[Coroutine[Any, Any, Any]],
-            task_group2: asyncio.TaskGroup,
-            tasks2: List[Coroutine[Any, Any, Any]],
-        ) -> None:
-            # handle exceptions
-            try:
-                async with task_group as tg, task_group2 as tg2:
-                    for task in tasks:
-                        t = tg.create_task(task)
-                        _task_list.append(t)
-                    for task in tasks2:
-                        t2 = tg2.create_task(task)
-                        _task_list.append(t2)
-            except* AbortException as err:
-                print(f"{err=}")
-            await asyncio.sleep(0)
+        # Run cycle TaskGroup in a background thread that can be restarted
+        self._cycle_thread = threading.Thread(
+            target=self._run_loops,
+            kwargs={"task_group": self.task_group_2, "task_list": tg2},
+            daemon=True,
+            name="Cycle Loops",
+        ).start()
 
-        await create_task_group(self.task_group_1, tg1, self.task_group_2, tg2)
+        await self._run_loops(self.task_group_1, tg1)
 
-        for i, task in enumerate(_task_list):
+        for i, task in enumerate(self._task_list):
             print(f"Task{i}: done={task.done()}, cancelled={task.cancelled()}")
 
     # -----------------------------------------------------------------------
@@ -324,6 +335,14 @@ class Ioc:
     async def check_abort(self) -> None:
         if self.abort:
             await self.raise_abort()
+
+    @_loop_forever
+    @_if_connected
+    async def check_cycle_thread(self) -> None:
+        if self._cycle_thread is not None:
+            if not self._cycle_thread.is_alive():
+                self._cycle_thread.start()
+        await asyncio.sleep(1)
 
     # -----------------------------------------------------------------------
     #                               Methods
