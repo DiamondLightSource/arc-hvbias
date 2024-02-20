@@ -129,8 +129,10 @@ class Ioc:
         self.run_param_status_update = asyncio.Event()
         self.run_update_time_params = asyncio.Event()
         self.run_cycle_control = asyncio.Event()
+        self.run_check_cycle = asyncio.Event()
         # Make sure cycles are not started on boot
         self.run_cycle_control.clear()
+        self.run_check_cycle.clear()
 
         self._cycle_thread: Optional[threading.Thread] = None
 
@@ -138,6 +140,10 @@ class Ioc:
         self.task_group_1 = asyncio.TaskGroup()
         self.task_group_2 = asyncio.TaskGroup()
         # self.pause_cycle = cothread.Event()
+
+    # -----------------------------------------------------------------------
+    #                           Loop Creation
+    # -----------------------------------------------------------------------
 
     async def _run_loops(
         self, task_group: asyncio.TaskGroup, task_list: List[Coroutine[Any, Any, Any]]
@@ -339,9 +345,16 @@ class Ioc:
     @_loop_forever
     @_if_connected
     async def check_cycle_thread(self) -> None:
+        # Pause thread if flag is False
+        if not self.run_check_cycle.is_set():
+            # Wait until flag become True
+            await self.run_check_cycle.wait()
+
         if self._cycle_thread is not None:
             if not self._cycle_thread.is_alive():
                 self._cycle_thread.start()
+                # Make sure to clear flag so loop isn't constantly checking
+                self.run_check_cycle.clear()
         await asyncio.sleep(1)
 
     # -----------------------------------------------------------------------
@@ -461,6 +474,7 @@ class Ioc:
 
                 # wait for all tasks to be "cancelled"
                 await asyncio.wait_for(_tasks_done(), timeout=None)
+                self.run_check_cycle.set()
 
                 await self.do_ramp_off(1)
                 self.cycle_failed = True
