@@ -3,7 +3,7 @@ import math
 import threading
 import warnings
 from datetime import datetime
-from typing import Any, Callable, Coroutine, List, Optional, cast
+from typing import Any, Coroutine, List, Optional
 
 # Import the basic framework components.
 from softioc import builder, softioc
@@ -162,21 +162,13 @@ class Ioc:
                         t = tg.create_task(task)
                         self._task_list.append(t)
             except* AbortException as err:
-                print(f"{err=}")
+                tprint(f"/!\\ Abort Called /!\\")
             await asyncio.sleep(0)
 
         await create_task_group(task_group, task_list)
 
     async def run_forever(self) -> None:
         """Run the IOC methods continuously."""
-
-        # try:
-        #     if getattr(self, "_socket", None) is None:
-        #         await self.start_stream()
-        # except Exception as e:
-        #     print("Exception when starting stream:", e)
-
-        self.running = True
 
         self.tg1 = [
             self.connection_check(),
@@ -485,16 +477,13 @@ class Ioc:
         self.cycle_flag = False
 
     async def raise_abort(self) -> None:
-        tprint("raise abort")
         self.k.abort_flag = True
         # Raise error to propagate to other tasks in TaskGroup
-        raise AbortException("Abort called.")
+        raise AbortException()
 
     async def do_stop(self, stop: int) -> None:
         # If stop called, abort and Ramp to OFF setpoint
         if stop == 1:
-            tprint(f"/!\\ Cycle Aborted.")
-
             try:
                 self.abort = True
             finally:
