@@ -135,8 +135,11 @@ class Ioc:
         self.run_check_cycle.clear()
 
         self._cycle_thread: Optional[threading.Thread] = None
+        self._cycle_thread_task: Optional[asyncio.Task] = None
 
         self._task_list: List[asyncio.Task] = []
+        self.tg1: Optional[List[Coroutine[Any, Any, Any]]] = None
+        self.tg2: Optional[List[Coroutine[Any, Any, Any]]] = None
         self.task_group_1 = asyncio.TaskGroup()
         self.task_group_2 = asyncio.TaskGroup()
         # self.pause_cycle = cothread.Event()
@@ -175,30 +178,63 @@ class Ioc:
 
         self.running = True
 
-        tg1: List[Coroutine[Any, Any, Any]] = [
+        self.tg1 = [
             self.connection_check(),
             self.calculate_healthy(),
             self.set_param_rbvs(),
             self.check_cycle_thread(),
         ]
-        tg2: List[Coroutine[Any, Any, Any]] = [
+
+        # Set up background cycle thread and start it
+        await self._start_cycle_thread()
+
+        await self._run_loops(self.task_group_1, self.tg1)
+
+        for i, task in enumerate(self._task_list):
+            print(f"Task{i}: done={task.done()}, cancelled={task.cancelled()}")
+
+    async def _create_task_group_2(self) -> None:
+        # Make sure tg2 list is cleared to make sure asyncio sees them as new awaitables
+        if self.tg2 is not None:
+            self.tg2 = None
+
+        self.tg2 = [
             self.update_time_params(),
             self.cycle_control(),
             self.check_abort(),
         ]
 
+        # Create new TaskGroup so it can be "restarted"
+        self.task_group_2 = asyncio.TaskGroup()
+
+    async def _create_cycle_task(self) -> asyncio.Task:
+        await self._create_task_group_2()
+        assert self.tg2 is not None
+
+        # Set up task so that it can be awaited in the background thread
+        _task = asyncio.create_task(
+            self._run_loops(task_group=self.task_group_2, task_list=self.tg2)
+        )
+
+        return _task
+
+    async def _start_cycle_thread(self) -> None:
+        if self._cycle_thread is not None:
+            # Make sure thread is cleared
+            self._cycle_thread.join()
+            self._cycle_thread = None
+
+        _task = await self._create_cycle_task()
+
         # Run cycle TaskGroup in a background thread that can be restarted
         self._cycle_thread = threading.Thread(
-            target=self._run_loops,
-            kwargs={"task_group": self.task_group_2, "task_list": tg2},
-            daemon=True,
+            target=asyncio.gather,
+            args=(_task,),
             name="Cycle Loops",
-        ).start()
+        )
+        self._cycle_thread.start()
 
-        await self._run_loops(self.task_group_1, tg1)
-
-        for i, task in enumerate(self._task_list):
-            print(f"Task{i}: done={task.done()}, cancelled={task.cancelled()}")
+        await asyncio.sleep(0)
 
     # -----------------------------------------------------------------------
     #                           Loop Methods
@@ -352,7 +388,7 @@ class Ioc:
 
         if self._cycle_thread is not None:
             if not self._cycle_thread.is_alive():
-                self._cycle_thread.start()
+                await self._start_cycle_thread()
                 # Make sure to clear flag so loop isn't constantly checking
                 self.run_check_cycle.clear()
         await asyncio.sleep(1)
@@ -474,7 +510,9 @@ class Ioc:
 
                 # wait for all tasks to be "cancelled"
                 await asyncio.wait_for(_tasks_done(), timeout=None)
-                self.run_check_cycle.set()
+
+                # Clear abort flag before other logic checks it again
+                self.abort = False
 
                 await self.do_ramp_off(1)
                 self.cycle_failed = True
@@ -483,6 +521,7 @@ class Ioc:
                 if not self.cycle_finished:
                     await self._finish_cycle()
 
+                self.run_check_cycle.set()
                 self.at_voltage_time = None
                 self.cycle_stop_time = None
                 self.time_since_rbv.set(0)
