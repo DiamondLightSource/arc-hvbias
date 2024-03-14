@@ -1,12 +1,11 @@
 import asyncio
 import math
 import threading
-import warnings
 from datetime import datetime
 from typing import Any, Coroutine, List, Optional
 
 # Import the basic framework components.
-from softioc import builder, softioc
+from softioc import builder
 
 from .decorators import (
     AbortException,
@@ -161,8 +160,8 @@ class Ioc:
                     for task in tasks:
                         t = tg.create_task(task)
                         self._task_list.append(t)
-            except* AbortException as err:
-                tprint(f"/!\\ Abort Called /!\\")
+            except* AbortException:
+                tprint("/!\\ Abort Called /!\\")
             await asyncio.sleep(0)
 
         await create_task_group(task_group, task_list)
@@ -240,9 +239,10 @@ class Ioc:
         is_connected = False
         model = ""
 
+        # TODO: Remove try-except
         try:
             is_connected, model = await self.k.check_connected()
-        except Exception as e:
+        except Exception:
             print("CheckConnected error")
 
         if not is_connected:

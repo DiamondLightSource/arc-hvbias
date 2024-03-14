@@ -3,7 +3,6 @@ import asyncio
 # import logging
 import socket
 import warnings
-from select import select
 from typing import Optional
 
 # Constants
@@ -67,9 +66,9 @@ class Comms:
         try:
             # print(f"Sending request:\n{self._format_message(request)}")
             self._socket.send(self._format_message(request))
-        except BrokenPipeError as e:
+        except BrokenPipeError:
             warnings.warn("Pipe broken, make sure device is connected.")
-        except BlockingIOError as e:
+        except BlockingIOError:
             print("IO blocked, make sure device is connected.")
 
     async def _send_receive(self, request: bytes) -> Optional[bytes]:

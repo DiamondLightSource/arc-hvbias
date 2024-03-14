@@ -2,6 +2,7 @@
 Defines a connection to a Kiethley 2400 over serial and provides an interface
 to command and query the device
 """
+
 import asyncio
 import codecs
 import math
@@ -34,8 +35,6 @@ class Keithley(object):
         self.sweep_start = datetime.now()
         self.sweep_seconds = 0.0
         self.abort_flag = False
-
-        # self.connect()
 
     def __del__(self) -> None:
         if self._comms is not None:
@@ -229,8 +228,6 @@ class Keithley(object):
             voltage = await self.get_voltage()
             voltage += step_size
             await asyncio.sleep(interval)
-            # Relinquish control
-            await asyncio.sleep(0)
 
     startup_commands = """
 :syst:beep:stat 0
