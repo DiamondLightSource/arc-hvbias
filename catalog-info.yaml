@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: arc-hvbias
+  title: arc-hvbias
+  description: A Python softioc module for controlling the ARC detector HV Bias
+spec:
+  type: documentation
+  lifecycle: experimental
+  owner: group:default/sscc
