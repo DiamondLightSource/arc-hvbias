@@ -3,7 +3,6 @@ import asyncio
 # import logging
 import socket
 import warnings
-from typing import Optional
 
 # Constants
 CR = "\r"
@@ -42,7 +41,7 @@ class Comms:
         while True:
             try:
                 self._socket.recv(RECV_BUFFER)
-            except socket.timeout:
+            except TimeoutError:
                 break
 
     @staticmethod
@@ -67,11 +66,11 @@ class Comms:
             # print(f"Sending request:\n{self._format_message(request)}")
             self._socket.send(self._format_message(request))
         except BrokenPipeError:
-            warnings.warn("Pipe broken, make sure device is connected.")
+            warnings.warn("Pipe broken, make sure device is connected.", stacklevel=1)
         except BlockingIOError:
             print("IO blocked, make sure device is connected.")
 
-    async def _send_receive(self, request: bytes) -> Optional[bytes]:
+    async def _send_receive(self, request: bytes) -> bytes | None:
         """Sends a request and attempts to decode the response. Does not determine if
         the response indicates acknowledgement from the device.
 
@@ -93,13 +92,12 @@ class Comms:
                     return response
             # except UnicodeDecodeError as e:
             #     warnings.warn(f"{e}:\n{self._format_message(response).decode()}")
-            except socket.timeout:
-                warnings.warn("Didn't receive a response in time.")
+            except TimeoutError:
+                warnings.warn("Didn't receive a response in time.", stacklevel=1)
 
-        # self._log.debug(f"Received response:\n{self._format_message(decoded_response)}")
         return None
 
-    async def send_receive(self, request: bytes) -> Optional[bytes]:
+    async def send_receive(self, request: bytes) -> bytes | None:
         """Sends a request and attempts to decode the response.
 
         Args:

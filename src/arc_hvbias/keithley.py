@@ -8,7 +8,7 @@ import codecs
 import math
 import warnings
 from datetime import datetime
-from typing import List, Literal, Optional, Tuple, Union
+from typing import Literal
 
 from .comms import Comms
 
@@ -22,7 +22,7 @@ async def _async_range(count):
         await asyncio.sleep(0.0)
 
 
-class Keithley(object):
+class Keithley:
     def __init__(
         self,
         ip: str = "192.168.0.1",
@@ -43,8 +43,8 @@ class Keithley(object):
     async def connect(self) -> None:
         await self._comms.connect()
 
-        await self._comms.send_receive("".encode())
-        await self._comms.send_receive("*RST".encode())
+        await self._comms.send_receive(b"")
+        await self._comms.send_receive(b"*RST")
 
         is_connected, model = await self.check_connected()
         if is_connected:
@@ -52,11 +52,13 @@ class Keithley(object):
             await self._comms.send_receive(self.startup_commands)
             self.last_recv = ""
         else:
-            warnings.warn("Cannot connect to device. Identifier not recognized.")
+            warnings.warn(
+                "Cannot connect to device. Identifier not recognized.", stacklevel=1
+            )
 
-    async def check_connected(self) -> Tuple[bool, Optional[bytes]]:
+    async def check_connected(self) -> tuple[bool, bytes | None]:
         # Check the connection
-        model = await self._comms.send_receive("*idn?".encode())
+        model = await self._comms.send_receive(b"*idn?")
         if model is None or "MODEL 24" not in model.decode():
             return False, None
         return True, model
@@ -65,42 +67,42 @@ class Keithley(object):
         self._comms.disconnect()
 
     async def set_data_elements(self) -> None:
-        resp = await self._comms.send_receive(":ELEM, VOLT, CURR, TIME, STAT".encode())
-        query_elements = await self._comms.send_receive(":ELEM?".encode())
+        await self._comms.send_receive(b":ELEM, VOLT, CURR, TIME, STAT")
+        await self._comms.send_receive(b":ELEM?")
 
     async def arm_direction(self, direction: str = "SOURCE") -> None:
-        resp = await self._comms.send_receive(f":ARM:DIR {direction}".encode())
+        await self._comms.send_receive(f":ARM:DIR {direction}".encode())
 
     async def trigger_direction(self, direction: str = "SOURCE") -> None:
-        resp = await self._comms.send_receive(f":TRIGGER:DIR {direction}".encode())
+        await self._comms.send_receive(f":TRIGGER:DIR {direction}".encode())
 
     async def arm_source(self, source: str = "IMMEDIATE") -> None:
-        resp = await self._comms.send_receive(f":ARM:SOURCE {source}".encode())
+        await self._comms.send_receive(f":ARM:SOURCE {source}".encode())
 
     async def trigger_source(self, source: str = "IMMEDIATE") -> None:
-        resp = await self._comms.send_receive(f":TRIGGER:SOURCE {source}".encode())
+        await self._comms.send_receive(f":TRIGGER:SOURCE {source}".encode())
 
-    async def arm_count(self, count: Union[int, Literal["INF"]] = 1) -> None:
+    async def arm_count(self, count: int | Literal["INF"] = 1) -> None:
         assert count >= 1 and count <= 2500 if isinstance(count, int) else "INF"
-        resp = await self._comms.send_receive(f":ARM:COUNT {count}".encode())
+        await self._comms.send_receive(f":ARM:COUNT {count}".encode())
 
     async def trigger_count(self, count: int = 1) -> None:
         assert count >= 1 and count <= 2500
-        resp = await self._comms.send_receive(f":TRIGGER:COUNT {count}".encode())
+        await self._comms.send_receive(f":TRIGGER:COUNT {count}".encode())
 
     async def initiate(self) -> None:
-        resp = await self._comms.send_receive(":INIT".encode())
+        await self._comms.send_receive(b":INIT")
 
     async def configure(self, conf_func: str = "VOLT:DC") -> None:
-        resp = await self._comms.send_receive(f":CONF:{conf_func}".encode())
+        await self._comms.send_receive(f":CONF:{conf_func}".encode())
 
-    async def query_configure(self) -> Optional[str]:
-        resp = await self._comms.send_receive(":CONF?".encode())
+    async def query_configure(self) -> str | None:
+        resp = await self._comms.send_receive(b":CONF?")
         if resp is not None:
             resp = codecs.decode(resp).strip("\n")
         return resp
 
-    async def measure(self, measurement: str = "VOLTAGE") -> Optional[bytes]:
+    async def measure(self, measurement: str = "VOLTAGE") -> bytes | None:
         measurement = measurement.upper()
         assert measurement in [
             "VOLT",
@@ -113,15 +115,15 @@ class Keithley(object):
         resp = await self._comms.send_receive(f":MEASURE:{measurement}?".encode())
         return resp
 
-    async def fetch(self) -> List[str]:
-        resp = await self._comms.send_receive(":FETCH?".encode())
+    async def fetch(self) -> list[str]:
+        resp = await self._comms.send_receive(b":FETCH?")
         if resp is not None:
             return codecs.decode(resp).strip("\n").split(",")
         else:
             raise Exception(":FETCH? response is 'None'. Is the source on?")
 
-    async def read(self) -> List[str]:
-        resp = await self._comms.send_receive(":READ?".encode())
+    async def read(self) -> list[str]:
+        resp = await self._comms.send_receive(b":READ?")
         if resp is not None:
             return codecs.decode(resp).strip("\n").split(",")
         else:
@@ -130,60 +132,56 @@ class Keithley(object):
     async def source_auto_clear(self, on_off: str = "ON") -> None:
         on_off = on_off.upper()
         assert on_off in ["ON", "OFF"]
-        resp = await self._comms.send_receive(f":SOURCE:CLEAR:AUTO {on_off}".encode())
+        await self._comms.send_receive(f":SOURCE:CLEAR:AUTO {on_off}".encode())
 
     async def get_voltage(self) -> float:
-        volts = await self._comms.send_receive(":SOURCE:VOLTAGE?".encode())
+        volts = await self._comms.send_receive(b":SOURCE:VOLTAGE?")
         return float(volts.decode()) if volts is not None else 0.0
 
     async def set_voltage(self, volts: float) -> None:
         # only allow negative voltages
         volts = math.fabs(volts) * -1
-        resp = await self._comms.send_receive(f":SOURCE:VOLTAGE {volts}".encode())
+        await self._comms.send_receive(f":SOURCE:VOLTAGE {volts}".encode())
 
     async def get_vol_compliance(self) -> float:
-        vol_compl = await self._comms.send_receive(
-            ":SENSE:VOLTAGE:PROT:LEVEL?".encode()
-        )
+        vol_compl = await self._comms.send_receive(b":SENSE:VOLTAGE:PROT:LEVEL?")
         return float(vol_compl.decode()) if vol_compl is not None else 0.0
 
     async def set_vol_compliance(self, vol_compl: float) -> None:
         vol_compl = math.fabs(vol_compl) * -1
-        resp = await self._comms.send_receive(
+        await self._comms.send_receive(
             f":SENSE:VOLTAGE:PROT:LEVEL {vol_compl}".encode()
         )
 
     async def get_current(self) -> float:
-        amps = await self._comms.send_receive(":SOURCE:CURRENT?".encode())
+        amps = await self._comms.send_receive(b":SOURCE:CURRENT?")
         # make it mAmps
         return float(amps.decode()) * 1000 if amps is not None else 0.0
 
     async def get_cur_compliance(self) -> float:
-        cur_compl = await self._comms.send_receive(
-            ":SENSE:CURRENT:PROT:LEVEL?".encode()
-        )
+        cur_compl = await self._comms.send_receive(b":SENSE:CURRENT:PROT:LEVEL?")
         return float(cur_compl.decode()) * 1000 if cur_compl is not None else 0.0
 
     async def set_cur_compliance(self, cur_compl: float) -> None:
         cur_compl = math.fabs(cur_compl) / 1000
-        resp = await self._comms.send_receive(
+        await self._comms.send_receive(
             f":SENSE:CURRENT:PROT:LEVEL {cur_compl}".encode()
         )
 
     async def source_off(self, _) -> None:
-        await self._comms.send_receive(":SOURCE:CLEAR:IMMEDIATE".encode())
+        await self._comms.send_receive(b":SOURCE:CLEAR:IMMEDIATE")
 
     async def source_on(self, _) -> None:
-        await self._comms.send_receive(":OUTPUT:STATE ON".encode())
+        await self._comms.send_receive(b":OUTPUT:STATE ON")
 
     async def abort(self) -> None:
-        await self._comms.send_receive(":ABORT".encode())
+        await self._comms.send_receive(b":ABORT")
         # come out of sweep mode if we are in it
         self.sweep_seconds = 0
         self.abort_flag = True
 
     async def get_source_status(self) -> int:
-        result = await self._comms.send_receive(":OUTPUT:STATE?".encode())
+        result = await self._comms.send_receive(b":OUTPUT:STATE?")
         return int(result.decode()) if result is not None else 0
 
     async def source_voltage_ramp(
@@ -219,9 +217,9 @@ class Keithley(object):
         step_size = difference / steps
         interval = seconds / steps - LOOP_OVERHEAD
 
-        await self._comms.send_receive(":SOURCE:FUNCTION:MODE VOLTAGE".encode())
-        await self._comms.send_receive(":SOURCE:VOLTAGE:MODE FIXED".encode())
-        async for step in _async_range(steps + 1):
+        await self._comms.send_receive(b":SOURCE:FUNCTION:MODE VOLTAGE")
+        await self._comms.send_receive(b":SOURCE:VOLTAGE:MODE FIXED")
+        async for _step in _async_range(steps + 1):
             if self.abort_flag:
                 break
             await self._comms.send_receive(f":SOURCE:VOLTAGE {voltage}".encode())
@@ -229,10 +227,10 @@ class Keithley(object):
             voltage += step_size
             await asyncio.sleep(interval)
 
-    startup_commands = """
+    startup_commands = b"""
 :syst:beep:stat 0
 :SENSE:FUNCTION:ON  "CURRENT:DC","VOLTAGE:DC"
 :SENSE:CURRENT:RANGE:AUTO 1
 :SENSE:VOLTAGE:RANGE:AUTO 1
 :SOURCE:VOLTAGE:RANGE:AUTO 1
-""".encode()
+"""

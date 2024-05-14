@@ -1,8 +1,9 @@
 import asyncio
 import math
 import threading
+from collections.abc import Coroutine
 from datetime import datetime
-from typing import Any, Coroutine, List, Optional
+from typing import Any
 
 # Import the basic framework components.
 from softioc import builder
@@ -114,8 +115,8 @@ class Ioc:
         self.max_time = builder.longOut("MAX-TIME", initial_value=900)
 
         # other state variables
-        self.at_voltage_time: Optional[datetime] = None
-        self.cycle_stop_time: Optional[datetime] = None
+        self.at_voltage_time: datetime | None = None
+        self.cycle_stop_time: datetime | None = None
         self.last_transition = datetime.now()
         # self.pause_flag = False
         self.cycle_flag: bool = False
@@ -133,12 +134,12 @@ class Ioc:
         self.run_cycle_control.clear()
         self.run_check_cycle.clear()
 
-        self._cycle_thread: Optional[threading.Thread] = None
-        self._cycle_thread_task: Optional[asyncio.Task] = None
+        self._cycle_thread: threading.Thread | None = None
+        self._cycle_thread_task: asyncio.Task | None = None
 
-        self._task_list: List[asyncio.Task] = []
-        self.tg1: Optional[List[Coroutine[Any, Any, Any]]] = None
-        self.tg2: Optional[List[Coroutine[Any, Any, Any]]] = None
+        self._task_list: list[asyncio.Task] = []
+        self.tg1: list[Coroutine[Any, Any, Any]] | None = None
+        self.tg2: list[Coroutine[Any, Any, Any]] | None = None
         self.task_group_1 = asyncio.TaskGroup()
         self.task_group_2 = asyncio.TaskGroup()
         # self.pause_cycle = cothread.Event()
@@ -148,11 +149,11 @@ class Ioc:
     # -----------------------------------------------------------------------
 
     async def _run_loops(
-        self, task_group: asyncio.TaskGroup, task_list: List[Coroutine[Any, Any, Any]]
+        self, task_group: asyncio.TaskGroup, task_list: list[Coroutine[Any, Any, Any]]
     ) -> None:
         async def create_task_group(
             task_group: asyncio.TaskGroup,
-            tasks: List[Coroutine[Any, Any, Any]],
+            tasks: list[Coroutine[Any, Any, Any]],
         ) -> None:
             # handle exceptions
             try:
@@ -347,7 +348,8 @@ class Ioc:
         self.run_update_time_params.set()
 
         tprint("Start Cycle")
-        # If already off, instantly set Time Since to 0 and also Ramp to ON, then wait MAX TIME
+        # If already off, instantly set Time Since to 0 and also Ramp to ON,
+        # then wait MAX TIME
         if math.isclose(self.voltage_rbv.get(), 0.0, abs_tol=volt_tol):
             await self.depolarise()
 

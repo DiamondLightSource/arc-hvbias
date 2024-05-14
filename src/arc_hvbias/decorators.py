@@ -1,6 +1,7 @@
 import asyncio
 import warnings
-from typing import Any, Callable, Coroutine, cast
+from collections.abc import Callable, Coroutine
+from typing import Any, cast
 
 # from .ioc import Ioc
 
@@ -78,16 +79,16 @@ def _catch_exceptions(func: _AsyncFuncType) -> _AsyncFuncType:
             await func(*args, **kwargs)
         except ValueError as e:
             # catch conversion errors when device returns and error string
-            warnings.warn(f"{e}, {self.k.last_recv}")
+            warnings.warn(f"{e}, {self.k.last_recv}", stacklevel=1)
             # cothread.Yield()
-        except AbortException as e:
+        except AbortException:
             # pass
             print("AbortException")
         # except asyncio.CancelledError as e:
         #     curr_t = asyncio.current_task()
         #     print(f"Cancel called on {curr_t}, restarting thread...")
         except Exception as e:
-            warnings.warn(f"{e}")
+            warnings.warn(f"{e}", stacklevel=1)
 
     return cast(_AsyncFuncType, catch_exceptions)
 
